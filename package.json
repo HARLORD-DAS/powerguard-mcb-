@@ -1,0 +1,17 @@
+{
+  "name": "mcb-digital-twin",
+  "version": "1.0.0",
+  "description": "3D Digital Twin of AI/ML Enabled Automated MCB Testing System",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host --port 3000",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}

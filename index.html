@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCB Testing System — 3D Engineering Digital Twin</title>
+  <meta name="description" content="Photorealistic True 3D Interactive Engineering Digital Twin of the Industrial MCB Testing System. Direct 3D object manipulation, internal architecture inspection, and real-time digital twin commissioning.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Orbitron:wght@600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+  <!-- 3D WebGL Canvas Container (The 3D Model IS the UI) -->
+  <div id="canvas-container"></div>
+
+  <!-- Minimal Dynamic 3D Object Callout (Anchors in 3D world space onto clicked/inspected objects) -->
+  <div id="world-callout" class="world-callout hidden">
+    <div class="callout-header">
+      <span class="callout-badge" id="callout-category">COMPONENT</span>
+      <button class="callout-close" id="callout-close-btn" title="Dismiss">&times;</button>
+    </div>
+    <div class="callout-title" id="callout-name">Component Name</div>
+    <div class="callout-desc" id="callout-desc">Component description.</div>
+    <div class="callout-telemetry" id="callout-telemetry">
+      <div class="telemetry-pill"><span class="lbl">STATUS:</span> <strong id="callout-stat-state" class="val-green">READY</strong></div>
+      <div class="telemetry-pill"><span class="lbl">VOLTAGE:</span> <strong id="callout-stat-v">230.2 V</strong></div>
+      <div class="telemetry-pill"><span class="lbl">CURRENT:</span> <strong id="callout-stat-i">0.0 A</strong></div>
+    </div>
+
+    <!-- DUT Configuration Controls (Revealed when inspecting MCB DUT) -->
+    <div id="callout-dut-config" class="callout-dut-config hidden">
+      <div class="config-title">DUT Parameter Configuration</div>
+      <div class="config-row">
+        <span class="cfg-lbl">Rated Current (In):</span>
+        <div class="cfg-chips" id="cfg-in-chips">
+          <button class="cfg-chip" data-in="6">6A</button>
+          <button class="cfg-chip" data-in="10">10A</button>
+          <button class="cfg-chip active" data-in="16">16A</button>
+          <button class="cfg-chip" data-in="25">25A</button>
+          <button class="cfg-chip" data-in="32">32A</button>
+          <button class="cfg-chip" data-in="63">63A</button>
+        </div>
+      </div>
+      <div class="config-row">
+        <span class="cfg-lbl">Trip Curve:</span>
+        <div class="cfg-chips" id="cfg-curve-chips">
+          <button class="cfg-chip" data-curve="B">B (3-5 In)</button>
+          <button class="cfg-chip active" data-curve="C">C (5-10 In)</button>
+          <button class="cfg-chip" data-curve="D">D (10-20 In)</button>
+        </div>
+      </div>
+      <div class="config-row">
+        <span class="cfg-lbl">Poles:</span>
+        <div class="cfg-chips" id="cfg-poles-chips">
+          <button class="cfg-chip" data-poles="SP">SP</button>
+          <button class="cfg-chip" data-poles="SPN">SPN</button>
+          <button class="cfg-chip active" data-poles="DP">DP</button>
+          <button class="cfg-chip" data-poles="TP">TP</button>
+          <button class="cfg-chip" data-poles="FP">FP</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- High-Speed DAQ Waveform Oscilloscope (Revealed when inspecting DAQ or after test) -->
+    <div id="callout-waveform-container" class="callout-waveform-container hidden">
+      <div class="waveform-header">
+        <span class="wf-title">DAQ Sub-Cycle Transient Waveform</span>
+        <div class="wf-badges">
+          <span class="badge-ip" id="badge-ip">Ip: 0.0 kA</span>
+          <span class="badge-time" id="badge-ttrip">t: 0.0 ms</span>
+          <span class="badge-i2t" id="badge-i2t">I²t: 0 A²s</span>
+        </div>
+      </div>
+      <canvas id="waveform-canvas" width="380" height="140"></canvas>
+      <div class="waveform-legend">
+        <span class="legend-i"><span class="dot-i"></span> Current i(t) [A]</span>
+        <span class="legend-v"><span class="dot-v"></span> Voltage v(t) [V]</span>
+      </div>
+    </div>
+
+    <div class="callout-actions">
+      <button class="callout-btn" id="callout-focus-btn">Focus Inspection</button>
+      <button class="callout-btn action-btn" id="callout-operate-btn">Operate / Toggle</button>
+    </div>
+  </div>
+
+  <!-- Subtle, Discreet Engineering Hotkey Bar (Fades away unless hovered) -->
+  <div class="hotkey-bar" id="hotkey-bar">
+    <div class="hotkey-item"><span class="key">Space</span> <span class="action">Run / Stop Test</span></div>
+    <div class="hotkey-item"><span class="key">E</span> <span class="action">Exploded View</span></div>
+    <div class="hotkey-item"><span class="key">X</span> <span class="action">X-Ray Mode</span></div>
+    <div class="hotkey-item"><span class="key">1-4</span> <span class="action">Isolate Paths</span></div>
+    <div class="hotkey-item"><span class="key">R</span> <span class="action">Reset Camera</span></div>
+    <div class="hotkey-divider">|</div>
+    <div class="hotkey-hint">Left-Click 3D Objects &bull; Knobs, Dials &amp; Switches are Interactive &bull; Right-Click Pan</div>
+  </div>
+
+  <!-- Application Entry Point -->
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
