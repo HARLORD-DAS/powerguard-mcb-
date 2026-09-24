@@ -618,7 +618,17 @@ class DigitalTwinApp {
   }
 }
 
-// Instantiate on load
-window.addEventListener('DOMContentLoaded', () => {
+// Instantiate reliably whether the dynamically imported module loads before
+// or after DOMContentLoaded. This prevents a blank canvas when custom-main.js
+// loads main.js asynchronously.
+const bootDigitalTwin = () => {
+  if (window.__mcbDigitalTwinBooted) return;
+  window.__mcbDigitalTwinBooted = true;
   new DigitalTwinApp();
-});
+};
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', bootDigitalTwin, { once: true });
+} else {
+  bootDigitalTwin();
+}
