@@ -28,7 +28,7 @@ export class CameraController {
   }
 
   // Smoothly focus on an inspected 3D component with automatic framing
-  focusOnComponent(worldPos, distance = 4.2) {
+  focusOnComponent(worldPos, distance = 7.0) {
     this.targetLookAt.copy(worldPos);
 
     // Calculate smooth camera position in front of the component
