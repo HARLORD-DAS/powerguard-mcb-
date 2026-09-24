@@ -180,7 +180,15 @@ class DigitalTwinApp {
         return;
       }
 
-      // 2. Input MCB Knob Click (Direct Physical Pathway Control)
+      // 2. Physical input MCB toggle: operate the lever and select its pathway.
+      if (ud.type === 'INPUT_MCB_TOGGLE') {
+        this.sim.selectPath(ud.pathId);
+        this.sim.toggleInputMCB(ud.pathId);
+        this.wiring.highlightPath(ud.pathId);
+        return;
+      }
+
+      // 3. Input MCB body click (Direct Physical Pathway Control)
       if (ud.type === 'INPUT_MCB_KNOB') {
         this.sim.selectPath(ud.pathId);
         this.sim.toggleInputMCB(ud.pathId);
@@ -191,7 +199,7 @@ class DigitalTwinApp {
         return;
       }
 
-      // 3. Common R/XL Configuration Bank Click
+      // 4. Common R/XL Configuration Bank Click
       if (ud.type === 'RXL_BANK') {
         // If click was in top half, cycle R; bottom half, cycle XL
         if (hit.point.y > 0) {
@@ -203,14 +211,19 @@ class DigitalTwinApp {
         return;
       }
 
-      // 4. High-Power Test Switch Click
+      // 5. High-Power Test Switch Click: selecting a physical contactor also selects its path.
       if (ud.type === 'POWER_SWITCH') {
-        this.sim.toggleSwitch(ud.pathId ?? ud.switchId);
+        const pathId = ud.pathId ?? ud.switchId;
+        if (pathId >= 1 && pathId <= 4) {
+          this.sim.selectPath(pathId);
+          this.wiring.highlightPath(pathId);
+        }
+        this.sim.toggleSwitch(pathId);
         this.showCallout(targetObj, hit.point);
         return;
       }
 
-      // 5. MCB Under Test (DUT) Toggle Lever / Station Click
+      // 6. MCB Under Test (DUT) Toggle Lever / Station Click
       if (ud.type === 'MCB_DUT_STATION') {
         if (this.sim.dutState === 'TRIPPED') {
           this.sim.resetDUT();
@@ -221,20 +234,21 @@ class DigitalTwinApp {
         return;
       }
 
-      // 6. Cabinet Enclosure Door Click
+      // 7. Cabinet Enclosure Door Click
       if (ud.type === 'CABINET_DOOR') {
         this.sim.doorsOpen = !this.sim.doorsOpen;
         return;
       }
 
-      // 7. Electrical Wire Click (Route tracing)
+      // 8. Electrical Wire Click (Route tracing + pathway selection)
       if (ud.type === 'ELECTRICAL_WIRE') {
+        if (ud.pathId >= 1 && ud.pathId <= 4) this.sim.selectPath(ud.pathId);
         this.wiring.highlightPath(ud.pathId);
         this.showCallout(targetObj, hit.point);
         return;
       }
 
-      // 8. Any physical component belonging to a pathway selects that pathway.
+      // 9. Any physical component belonging to a pathway selects that pathway.
       // This makes the four rows independently operable from the 3D machine,
       // not only from the keyboard shortcuts.
       if (ud.pathId >= 1 && ud.pathId <= 4) {
@@ -242,7 +256,7 @@ class DigitalTwinApp {
         this.wiring.highlightPath(ud.pathId);
       }
 
-      // 8. DAQ & General Component Inspection (Transformers, Sensors, PLC, DAQ, Earth Bus)
+      // 10. DAQ & General Component Inspection (Transformers, Sensors, PLC, DAQ, Earth Bus)
       if (ud.type === 'HIGH_SPEED_DAQ' || ud.type === 'DATA_ACQUISITION') {
         this.showCallout(targetObj, hit.point);
         targetObj.getWorldPosition(this.inspectedWorldPos);
