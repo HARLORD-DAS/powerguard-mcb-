@@ -192,8 +192,6 @@ export class TextureGenerator {
       ctx.font = 'bold 13px Inter, sans-serif';
       ctx.fillText('DIODE 1', 1146, py + 26);
 
-      // 5. Diode 2 (3D X = -1.0 -> Pixel X = 1320)
-      ctx.fillText('DIODE 2', 1320, py + 26);
     }
 
     // Center Column: Common R/XL Configuration Bank (3D X = 0.35 -> Pixel X = 1440 to 1780)
