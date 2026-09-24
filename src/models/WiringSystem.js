@@ -189,15 +189,10 @@ export class WiringSystem {
         ], 0.026, p.mat, p.id);
       }
 
-      // 3. Diode 1 (-1.8) to Diode 2 (-1.0)
+      // 3. Single diode per path (-1.8) to the ONE common R/XL bank
       this.createWireSpline([
         new THREE.Vector3(-1.65, p.y, -0.4),
-        new THREE.Vector3(-1.15, p.y, -0.4)
-      ], 0.024, p.mat, p.id);
-
-      // 4. Diode 2 (-1.0) to Common R/XL Configuration Bank (0.35)
-      this.createWireSpline([
-        new THREE.Vector3(-0.85, p.y, -0.4),
+        new THREE.Vector3(-0.9, p.y, -0.42),
         new THREE.Vector3(-0.3, p.y, -0.45),
         new THREE.Vector3(0.1, p.y, -0.38)
       ], 0.028, p.mat, p.id);

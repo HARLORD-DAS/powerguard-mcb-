@@ -968,48 +968,36 @@ export class InternalRack {
         });
       }
 
-      // 4. DIODES: EXACTLY TWO DIODES PER TESTING PATH (Diode 1 at X = -1.8, Diode 2 at X = -1.0)
-      [-1.8, -1.0].forEach((dx, dIdx) => {
-        const diodeGroup = new THREE.Group();
-        diodeGroup.position.set(dx, p.y, -0.4);
-
-        // Black Aluminum Heatsink Base with cooling fins
-        const hsBase = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.48, 0.08), this.heatsinkMat);
-        diodeGroup.add(hsBase);
-        for (let f = -0.18; f <= 0.18; f += 0.09) {
-          const fin = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.02, 0.12), this.heatsinkMat);
-          fin.position.set(0, f, 0.06);
-          diodeGroup.add(fin);
-        }
-
-        // Axial Diode Body (horizontal cylinder with cathode band)
-        const diodeCyl = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.1, 0.1, 0.36, 16),
-          this.diodeMat
-        );
-        diodeCyl.rotation.z = Math.PI / 2;
-        diodeCyl.position.z = 0.12;
-        diodeGroup.add(diodeCyl);
-
-        // Heavy Copper Leads
-        [-0.28, 0.28].forEach(lx => {
-          const lead = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.22, 8), this.brassMat);
-          lead.rotation.z = Math.PI / 2;
-          lead.position.set(lx, 0, 0.12);
-          diodeGroup.add(lead);
-        });
-
-        diodeGroup.userData = {
-          type: 'AXIAL_DIODE',
-          pathId: p.id,
-          diodeNum: dIdx + 1,
-          name: `Diode ${dIdx + 1} (${p.name})`,
-          category: 'Axial Power Diode',
-          desc: `Discrete 1000V 3A axial power diode providing unipolar pulse shaping and back-EMF flyback protection for path ${p.id}.`
-        };
-        pGrp.add(diodeGroup);
-        this.interactiveObjects.push(diodeGroup);
+      // 4. EXACTLY ONE DIODE PER TESTING PATH (D1-D4)
+      const diodeGroup = new THREE.Group();
+      diodeGroup.position.set(-1.8, p.y, -0.4);
+      const hsBase = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.48, 0.08), this.heatsinkMat);
+      diodeGroup.add(hsBase);
+      for (let f = -0.18; f <= 0.18; f += 0.09) {
+        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.02, 0.12), this.heatsinkMat);
+        fin.position.set(0, f, 0.06);
+        diodeGroup.add(fin);
+      }
+      const diodeCyl = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.36, 16), this.diodeMat);
+      diodeCyl.rotation.z = Math.PI / 2;
+      diodeCyl.position.z = 0.12;
+      diodeGroup.add(diodeCyl);
+      [-0.28, 0.28].forEach(lx => {
+        const lead = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.22, 8), this.brassMat);
+        lead.rotation.z = Math.PI / 2;
+        lead.position.set(lx, 0, 0.12);
+        diodeGroup.add(lead);
       });
+      diodeGroup.userData = {
+        type: 'AXIAL_DIODE',
+        pathId: p.id,
+        diodeNum: p.id,
+        name: 'Diode ' + p.id + ' (' + p.name + ')',
+        category: 'Axial Power Diode',
+        desc: 'Single discrete power diode for Path ' + p.id + '.'
+      };
+      pGrp.add(diodeGroup);
+      this.interactiveObjects.push(diodeGroup);
     });
   }
 
@@ -1163,6 +1151,44 @@ export class InternalRack {
       grp.add(iSens);
       this.interactiveObjects.push(iSens);
     });
+
+    // SENSOR STAGE 2 — Path 4 (Short-Circuit Neutral)
+    const p4v = this.createVoltageSensorUnit(
+      1.75, -1.8, -0.4,
+      'Stage 2 Prototype Voltage Sensor (Path 4)',
+      4,
+      'Post-Impedance Sensor Stage'
+    );
+    grp.add(p4v);
+    this.interactiveObjects.push(p4v);
+
+    const p4i = new THREE.Group();
+    p4i.position.set(2.35, -1.8, -0.4);
+    const p4Body = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.82, 0.08), this.currSensorMat);
+    p4i.add(p4Body);
+    const p4Toroid = new THREE.Mesh(
+      new THREE.TorusGeometry(0.13, 0.05, 14, 24),
+      new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.35 })
+    );
+    p4Toroid.position.set(0, 0, 0.1);
+    p4i.add(p4Toroid);
+    const p4Cond = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.82, 12), this.copperMat);
+    p4Cond.position.set(0, 0, 0.1);
+    p4i.add(p4Cond);
+    for (let hp = 0; hp < 4; hp++) {
+      const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.12, 8), this.brassMat);
+      pin.position.set(-0.15 + hp * 0.1, -0.38, 0.08);
+      p4i.add(pin);
+    }
+    p4i.userData = {
+      type: 'SENSOR_STAGE_2_CURRENT',
+      pathId: 4,
+      name: 'Stage 2 Current Sensor (Path 4)',
+      category: 'Post-Impedance Sensor Stage',
+      desc: 'Current sensor verifying delivery before the short-circuit neutral switch.'
+    };
+    grp.add(p4i);
+    this.interactiveObjects.push(p4i);
 
     // Row 4 neutral bypass trunking
     const neutralTrunk = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.2, 0.14), this.trunkingMat);

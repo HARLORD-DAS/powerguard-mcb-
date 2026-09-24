@@ -549,7 +549,12 @@ class DigitalTwinApp {
       } else if (ud.type === 'RXL_BANK') {
         this.sim.cycleResistance();
       } else if (ud.type === 'POWER_SWITCH') {
-        this.sim.toggleSwitch(ud.pathId ?? ud.switchId);
+        const pathId = ud.pathId ?? ud.switchId;
+        if (pathId >= 1 && pathId <= 4) {
+          this.sim.selectPath(pathId);
+          this.wiring.highlightPath(pathId);
+        }
+        this.sim.toggleSwitch(pathId);
       } else if (ud.type === 'MCB_DUT_STATION') {
         if (this.sim.dutState === 'TRIPPED') {
           this.sim.resetDUT();
