@@ -968,48 +968,36 @@ export class InternalRack {
         });
       }
 
-      // 4. DIODES: EXACTLY TWO DIODES PER TESTING PATH (Diode 1 at X = -1.8, Diode 2 at X = -1.0)
-      [-1.8, -1.0].forEach((dx, dIdx) => {
-        const diodeGroup = new THREE.Group();
-        diodeGroup.position.set(dx, p.y, -0.4);
-
-        // Black Aluminum Heatsink Base with cooling fins
-        const hsBase = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.48, 0.08), this.heatsinkMat);
-        diodeGroup.add(hsBase);
-        for (let f = -0.18; f <= 0.18; f += 0.09) {
-          const fin = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.02, 0.12), this.heatsinkMat);
-          fin.position.set(0, f, 0.06);
-          diodeGroup.add(fin);
-        }
-
-        // Axial Diode Body (horizontal cylinder with cathode band)
-        const diodeCyl = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.1, 0.1, 0.36, 16),
-          this.diodeMat
-        );
-        diodeCyl.rotation.z = Math.PI / 2;
-        diodeCyl.position.z = 0.12;
-        diodeGroup.add(diodeCyl);
-
-        // Heavy Copper Leads
-        [-0.28, 0.28].forEach(lx => {
-          const lead = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.22, 8), this.brassMat);
-          lead.rotation.z = Math.PI / 2;
-          lead.position.set(lx, 0, 0.12);
-          diodeGroup.add(lead);
-        });
-
-        diodeGroup.userData = {
-          type: 'AXIAL_DIODE',
-          pathId: p.id,
-          diodeNum: dIdx + 1,
-          name: `Diode ${dIdx + 1} (${p.name})`,
-          category: 'Axial Power Diode',
-          desc: `Discrete 1000V 3A axial power diode providing unipolar pulse shaping and back-EMF flyback protection for path ${p.id}.`
-        };
-        pGrp.add(diodeGroup);
-        this.interactiveObjects.push(diodeGroup);
+      // 4. EXACTLY ONE DIODE PER TESTING PATH (D1-D4)
+      const diodeGroup = new THREE.Group();
+      diodeGroup.position.set(-1.8, p.y, -0.4);
+      const hsBase = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.48, 0.08), this.heatsinkMat);
+      diodeGroup.add(hsBase);
+      for (let f = -0.18; f <= 0.18; f += 0.09) {
+        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.02, 0.12), this.heatsinkMat);
+        fin.position.set(0, f, 0.06);
+        diodeGroup.add(fin);
+      }
+      const diodeCyl = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.36, 16), this.diodeMat);
+      diodeCyl.rotation.z = Math.PI / 2;
+      diodeCyl.position.z = 0.12;
+      diodeGroup.add(diodeCyl);
+      [-0.28, 0.28].forEach(lx => {
+        const lead = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.22, 8), this.brassMat);
+        lead.rotation.z = Math.PI / 2;
+        lead.position.set(lx, 0, 0.12);
+        diodeGroup.add(lead);
       });
+      diodeGroup.userData = {
+        type: 'AXIAL_DIODE',
+        pathId: p.id,
+        diodeNum: p.id,
+        name: 'Diode ' + p.id + ' (' + p.name + ')',
+        category: 'Axial Power Diode',
+        desc: 'Single discrete power diode for Path ' + p.id + '.'
+      };
+      pGrp.add(diodeGroup);
+      this.interactiveObjects.push(diodeGroup);
     });
   }
 
