@@ -724,6 +724,13 @@ export class InternalRack {
         togglePivot.add(ridge);
       }
 
+      togglePivot.userData = {
+        type: 'INPUT_MCB_TOGGLE',
+        pathId: p.id,
+        name: `Input MCB ${p.id} Physical Toggle`,
+        category: 'Pathway MCB Toggle',
+        desc: `Physical operating lever for Path ${p.id}. Clicking the blue lever changes the breaker state.`
+      };
       mcbGroup.add(togglePivot);
 
       // (6) Dynamic Mechanical Trip / Contact Status Window (Below toggle lever)
@@ -812,7 +819,8 @@ export class InternalRack {
 
       // Interactive UserData
       mcbGroup.userData = {
-        type: 'INPUT_MCB_KNOB', // Retain for backwards compatibility with click dispatch
+        type: 'INPUT_MCB_KNOB', // Group click selects + toggles the physical input MCB
+
         pathId: p.id,
         name: `Input MCB (${p.name})`,
         category: '1-Pole DIN Miniature Circuit Breaker',
@@ -1196,6 +1204,7 @@ export class InternalRack {
       swGroup.userData = {
         type: 'POWER_SWITCH',
         switchId: sw.id,
+        pathId: sw.id === 'highCurrent' ? 1 : sw.id === 'voltage' ? 2 : sw.id === 'scLive' ? 3 : 4,
         name: sw.name,
         category: 'High-Power Switching',
         desc: `Vacuum power contactor rated for 100A test currents. Automatically engages during selected test sequence. Click to manually toggle.`
