@@ -1152,6 +1152,44 @@ export class InternalRack {
       this.interactiveObjects.push(iSens);
     });
 
+    // SENSOR STAGE 2 — Path 4 (Short-Circuit Neutral)
+    const p4v = this.createVoltageSensorUnit(
+      1.75, -1.8, -0.4,
+      'Stage 2 Prototype Voltage Sensor (Path 4)',
+      4,
+      'Post-Impedance Sensor Stage'
+    );
+    grp.add(p4v);
+    this.interactiveObjects.push(p4v);
+
+    const p4i = new THREE.Group();
+    p4i.position.set(2.35, -1.8, -0.4);
+    const p4Body = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.82, 0.08), this.currSensorMat);
+    p4i.add(p4Body);
+    const p4Toroid = new THREE.Mesh(
+      new THREE.TorusGeometry(0.13, 0.05, 14, 24),
+      new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.35 })
+    );
+    p4Toroid.position.set(0, 0, 0.1);
+    p4i.add(p4Toroid);
+    const p4Cond = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.82, 12), this.copperMat);
+    p4Cond.position.set(0, 0, 0.1);
+    p4i.add(p4Cond);
+    for (let hp = 0; hp < 4; hp++) {
+      const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.12, 8), this.brassMat);
+      pin.position.set(-0.15 + hp * 0.1, -0.38, 0.08);
+      p4i.add(pin);
+    }
+    p4i.userData = {
+      type: 'SENSOR_STAGE_2_CURRENT',
+      pathId: 4,
+      name: 'Stage 2 Current Sensor (Path 4)',
+      category: 'Post-Impedance Sensor Stage',
+      desc: 'Current sensor verifying delivery before the short-circuit neutral switch.'
+    };
+    grp.add(p4i);
+    this.interactiveObjects.push(p4i);
+
     // Row 4 neutral bypass trunking
     const neutralTrunk = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.2, 0.14), this.trunkingMat);
     neutralTrunk.position.set(2.05, -1.8, -0.45);
