@@ -205,7 +205,7 @@ class DigitalTwinApp {
 
       // 4. High-Power Test Switch Click
       if (ud.type === 'POWER_SWITCH') {
-        this.sim.toggleSwitch(ud.switchId);
+        this.sim.toggleSwitch(ud.pathId ?? ud.switchId);
         this.showCallout(targetObj, hit.point);
         return;
       }
@@ -232,6 +232,14 @@ class DigitalTwinApp {
         this.wiring.highlightPath(ud.pathId);
         this.showCallout(targetObj, hit.point);
         return;
+      }
+
+      // 8. Any physical component belonging to a pathway selects that pathway.
+      // This makes the four rows independently operable from the 3D machine,
+      // not only from the keyboard shortcuts.
+      if (ud.pathId >= 1 && ud.pathId <= 4) {
+        this.sim.selectPath(ud.pathId);
+        this.wiring.highlightPath(ud.pathId);
       }
 
       // 8. DAQ & General Component Inspection (Transformers, Sensors, PLC, DAQ, Earth Bus)
@@ -276,6 +284,7 @@ class DigitalTwinApp {
         const pId = parseInt(e.key);
         this.sim.selectPath(pId);
         this.wiring.highlightPath(pId);
+        this.updateCalloutContent();
       }
       // R: Reset Camera View & Reset DUT if tripped
       else if (e.key === 'r' || e.key === 'R') {
@@ -371,9 +380,9 @@ class DigitalTwinApp {
     } else if (ud.type === 'POWER_SWITCH') {
       category = 'HIGH-POWER SWITCHING';
       name = ud.name;
-      const swKey = ud.switchId;
+      const swKey = typeof ud.switchId === 'string' ? ud.switchId : (ud.pathId === 1 ? 'highCurrent' : ud.pathId === 2 ? 'voltage' : ud.pathId === 3 ? 'scLive' : 'scNeutral');
       const isClosed = this.sim.switches && this.sim.switches[swKey];
-      desc = `Vacuum test contactor for ${ud.name}.\n• State: ${isClosed ? 'CLOSED (HIGH POWER CONNECTED)' : 'OPEN (ISOLATED)'}\n• Hardware Interlock: ${ud.switchId === this.sim.activePath ? 'PERMITTED (Active Path)' : 'LOCKED OUT (Inactive Path)'}\n\nClick contactor in 3D scene to operate.`;
+      desc = `Vacuum test contactor for ${ud.name}.\n• State: ${isClosed ? 'CLOSED (HIGH POWER CONNECTED)' : 'OPEN (ISOLATED)'}\n• Hardware Interlock: ${ud.pathId === this.sim.activePath ? 'PERMITTED (Active Path)' : 'LOCKED OUT (Inactive Path)'}\n\nClick contactor in 3D scene to operate.`;
       if (operateBtn) operateBtn.textContent = isClosed ? 'Open Switch' : 'Close Switch';
     }
 
@@ -520,12 +529,13 @@ class DigitalTwinApp {
       if (!this.inspectedObject) return;
       const ud = this.inspectedObject.userData || {};
 
-      if (ud.type === 'INPUT_MCB_KNOB') {
+      if (ud.type === 'INPUT_MCB_KNOB' || ud.type === 'INPUT_MCB_TOGGLE') {
+        this.sim.selectPath(ud.pathId);
         this.sim.toggleInputMCB(ud.pathId);
       } else if (ud.type === 'RXL_BANK') {
         this.sim.cycleResistance();
       } else if (ud.type === 'POWER_SWITCH') {
-        this.sim.toggleSwitch(ud.switchId);
+        this.sim.toggleSwitch(ud.pathId ?? ud.switchId);
       } else if (ud.type === 'MCB_DUT_STATION') {
         if (this.sim.dutState === 'TRIPPED') {
           this.sim.resetDUT();
