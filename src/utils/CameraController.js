@@ -27,19 +27,10 @@ export class CameraController {
     this.isTransitioning = false;
   }
 
-  // Smoothly focus on an inspected 3D component with automatic framing
-  focusOnComponent(worldPos, distance = 7.0) {
-    this.targetLookAt.copy(worldPos);
-
-    // Calculate smooth camera position in front of the component
-    // Maintain a slight elevated angle (y + 0.3) for optimum depth perception
-    this.targetCamPos.set(
-      worldPos.x * 0.4,
-      worldPos.y + 0.2,
-      worldPos.z + distance
-    );
-
-    this.isTransitioning = true;
+  // Selection must never move the camera. Manual OrbitControls input is
+  // the only way to zoom/orbit/pan toward a selected component.
+  focusOnComponent() {
+    return;
   }
 
   // Smoothly reset camera to the full master cabinet overview
