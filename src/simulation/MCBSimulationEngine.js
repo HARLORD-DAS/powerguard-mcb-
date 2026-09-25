@@ -120,7 +120,8 @@ export class MCBSimulationEngine {
       targetCurrent: null,
       durationSec: 5,
       customR: null,
-      customXL: null
+      customXL: null,
+      targetPowerFactor: null
     };
     this.testEvaluation = null;
 
@@ -254,9 +255,20 @@ export class MCBSimulationEngine {
     if (this.onStateChange) this.onStateChange();
   }
 
+  setTestPowerFactor(value) {
+    const pf = Number(value);
+    if (!Number.isFinite(pf) || pf <= 0 || pf > 1) return;
+    this.testConfig.targetPowerFactor = pf;
+    const resistive = this.R;
+    const inductiveReactanceOhm = resistive * Math.sqrt(Math.max((1 / (pf * pf)) - 1, 0));
+    this.testConfig.customXL = (inductiveReactanceOhm / (2 * Math.PI * 50)) * 1000;
+    this.statusText = 'TEST CONDITION: TARGET PF = ' + pf.toFixed(3) + ' (XL recalculated)';
+    if (this.onStateChange) this.onStateChange();
+  }
   clearCustomImpedance() {
     this.testConfig.customR = null;
     this.testConfig.customXL = null;
+    this.testConfig.targetPowerFactor = null;
     this.statusText = 'COMMON R/XL BANK: R = ' + this.R + ' Ω, XL = ' + this.XL + ' mH';
     if (this.onStateChange) this.onStateChange();
   }
@@ -266,6 +278,17 @@ export class MCBSimulationEngine {
     const ratio = current / Math.max(this.dutConfig.ratedCurrent, 0.1);
     let expected = 'REVIEW';
     let reason = 'Condition is between defined simulation acceptance boundaries.';
+    if (type === 'SHORT_CIRCUIT' || type === 'BREAKING_CAPACITY') {
+      const range = this.shortCircuitPowerFactorRange;
+      if (this.powerFactor < range[0] || this.powerFactor > range[1]) {
+        this.statusText = 'TEST CONDITION INVALID: PF ' + this.powerFactor.toFixed(3) + ' OUTSIDE REQUIRED ' + range[0].toFixed(2) + '–' + range[1].toFixed(2) + ' RANGE';
+        this.testEvaluation = { status: 'FAIL', expected: 'VALID_TEST_CONDITION', ratio: iRatio, reason: 'Short-circuit power factor is outside the configured IEC 60898-1 test-circuit range.' };
+        this.switches.highCurrent = false; this.switches.voltage = false; this.switches.scLive = false; this.switches.scNeutral = false;
+        this.state = 'COMPLETE'; this.telemetry.current = 0;
+        if (this.onStateChange) this.onStateChange();
+        return;
+      }
+    }
     if (type === 'OVERLOAD') {
       if (ratio <= 1.13) { expected = 'NO_TRIP'; reason = 'At or below the conventional 1.13 × In non-tripping check.'; }
       else if (ratio >= 1.45) { expected = 'TRIP'; reason = 'At or above the conventional 1.45 × In tripping check.'; }
@@ -353,6 +376,9 @@ export class MCBSimulationEngine {
 
     soundFx.playSwitchClick(1.05);
     this.activePath = pathId;
+    if (pathId === 1) this.testConfig.type = 'OVERLOAD';
+    else if (pathId === 2) this.testConfig.type = 'VOLTAGE_WITHSTAND';
+    else if (pathId === 3 || pathId === 4) this.testConfig.type = 'SHORT_CIRCUIT';
 
     // Strict Hardware/Software Interlock: Open all switches immediately
     this.switches.highCurrent = false;
@@ -444,6 +470,7 @@ export class MCBSimulationEngine {
   cycleResistance() {
     soundFx.playSwitchClick(0.85);
     this.testConfig.customR = null;
+    this.testConfig.targetPowerFactor = null;
     this.selectedRIndex = (this.selectedRIndex + 1) % this.rValues.length;
     this.updateCalculatedCurrent();
     this.statusText = `COMMON R/XL: R = ${this.R} Ω, XL = ${this.XL} mH (Z = ${this.impedance.toFixed(3)} Ω)`;
@@ -454,6 +481,7 @@ export class MCBSimulationEngine {
   cycleReactance() {
     soundFx.playSwitchClick(0.85);
     this.testConfig.customXL = null;
+    this.testConfig.targetPowerFactor = null;
     this.selectedXlIndex = (this.selectedXlIndex + 1) % this.xlValues.length;
     this.updateCalculatedCurrent();
     this.statusText = `COMMON R/XL: R = ${this.R} Ω, XL = ${this.XL} mH (Z = ${this.impedance.toFixed(3)} Ω)`;
@@ -520,7 +548,7 @@ export class MCBSimulationEngine {
     const source = this.activePath === 1 ? this.transformerSpecs.highCurrent : this.activePath === 2 ? this.transformerSpecs.voltageStepUp : null;
     const configuredV = this.testConfig.appliedVoltage;
     const defaultV = source ? source.outputVoltage : mainsV;
-    const baseV = configuredV !== null ? configuredV : defaultV;
+    const baseV = configuredV !== null ? configuredV : Math.min(defaultV, 440);
     this.sourceTelemetry = source ? { type: this.activePath === 1 ? 'HIGH_CURRENT_TRANSFORMER' : 'VOLTAGE_STEP_UP_TRANSFORMER', inputVoltage: source.inputVoltage, inputCurrent: source.inputCurrent, outputVoltage: source.outputVoltage, outputCurrent: source.outputCurrent } : { type: 'DIRECT_PATH', inputVoltage: mainsV, inputCurrent: 0, outputVoltage: mainsV, outputCurrent: 0 };
     this.telemetry.voltage = parseFloat(baseV.toFixed(1));
     const inRated = this.dutConfig.ratedCurrent; const type = this.testConfig.type; let tripDelayMs = 2000; let peakCurrent = 0; const curveBand = this.dutCurveMultipliers[this.dutConfig.curve] || this.dutCurveMultipliers.C;
