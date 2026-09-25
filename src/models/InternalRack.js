@@ -31,6 +31,7 @@ export class InternalRack {
     this.xlDial = null;
     this.dutLever = null;
     this.dutLeverPivot = null;
+    this.dutLevers = [];
     this.dutModelGroup = null;
     this.dutDynamicCasingMeshes = [];
     this.dutDynamicXrayGroup = null;
@@ -1360,13 +1361,37 @@ export class InternalRack {
     const bodyD = 0.5;
     const spacing = bodyW / poleCount;
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(bodyW, bodyH, bodyD), new THREE.MeshStandardMaterial({
+    const dutMaterial = new THREE.MeshStandardMaterial({
       map: TextureGenerator.createDUTTexture(), roughness: 0.35, metalness: 0.1
-    }));
-    body.position.set(0, 0, 0.32);
-    this.dutModelGroup.add(body);
-    this.casingMeshes.push(body);
-    this.dutDynamicCasingMeshes.push(body);
+    });
+
+    // Build the DUT as separate physical pole modules instead of stretching one casing.
+    for (let p = 0; p < poleCount; p++) {
+      const px = -bodyW / 2 + spacing / 2 + p * spacing;
+      const poleBody = new THREE.Mesh(
+        new THREE.BoxGeometry(spacing * 0.94, bodyH, bodyD),
+        dutMaterial.clone()
+      );
+      poleBody.position.set(px, 0, 0.32);
+      poleBody.userData = {
+        type: 'MCB_DUT_POLE',
+        poleIndex: p + 1,
+        poleCount,
+        config: config.poles
+      };
+      this.dutModelGroup.add(poleBody);
+      this.casingMeshes.push(poleBody);
+      this.dutDynamicCasingMeshes.push(poleBody);
+
+      if (p > 0) {
+        const seam = new THREE.Mesh(
+          new THREE.BoxGeometry(0.018, bodyH * 0.94, 0.035),
+          this.dinRailMat
+        );
+        seam.position.set(px - spacing / 2, 0, 0.585);
+        this.dutModelGroup.add(seam);
+      }
+    }
 
     for (let p = 0; p < poleCount; p++) {
       const px = -bodyW / 2 + spacing / 2 + p * spacing;
@@ -1398,13 +1423,46 @@ export class InternalRack {
     this.casingMeshes.push(nose);
     this.dutDynamicCasingMeshes.push(nose);
 
+    // One mechanical carrier links one visible operating handle per pole.
     this.dutLeverPivot = new THREE.Group();
     this.dutLeverPivot.position.set(0, 0.05, 0.58);
-    const lever = new THREE.Mesh(new THREE.BoxGeometry(Math.min(0.30, bodyW * 0.72), 0.42, 0.16), new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.35 }));
-    lever.position.set(0, 0.12, 0);
-    this.dutLeverPivot.add(lever);
     this.dutModelGroup.add(this.dutLeverPivot);
-    this.dutLever = lever;
+    this.dutLevers = [];
+
+    const handleMaterial = new THREE.MeshStandardMaterial({
+      color: 0x15803d,
+      roughness: 0.35,
+      metalness: 0.05
+    });
+
+    for (let p = 0; p < poleCount; p++) {
+      const px = -bodyW / 2 + spacing / 2 + p * spacing;
+      const handle = new THREE.Mesh(
+        new THREE.BoxGeometry(Math.min(0.22, spacing * 0.62), 0.38, 0.16),
+        handleMaterial.clone()
+      );
+      handle.position.set(px, 0.12, 0);
+      handle.userData = {
+        type: 'MCB_DUT_POLE_TOGGLE',
+        poleIndex: p + 1,
+        poleCount,
+        config: config.poles,
+        linkedAssembly: true
+      };
+      this.dutLeverPivot.add(handle);
+      this.dutLevers.push(handle);
+    }
+
+    if (poleCount > 1) {
+      const coupling = new THREE.Mesh(
+        new THREE.BoxGeometry(bodyW * 0.72, 0.075, 0.19),
+        this.knobMat
+      );
+      coupling.position.set(0, 0.10, 0.015);
+      this.dutLeverPivot.add(coupling);
+    }
+
+    this.dutLever = this.dutLevers[0] || null;
 
     const xray = new THREE.Group();
     for (let p = 0; p < poleCount; p++) {
@@ -1697,9 +1755,14 @@ export class InternalRack {
         delta * 16.0
       );
     }
-    if (this.dutLever) {
+    if (this.dutLevers && this.dutLevers.length) {
       const isTripped = this.sim.dutState === 'TRIPPED';
-      this.dutLever.material.color.setHex(isTripped ? 0xb91c1c : 0x15803d);
+      const handleColor = isTripped ? 0xb91c1c : 0x15803d;
+      this.dutLevers.forEach(handle => {
+        if (handle && handle.material && handle.material.color) {
+          handle.material.color.setHex(handleColor);
+        }
+      });
     }
 
     // Dynamic Arc Flash Light & Glow behind safety blast shield
