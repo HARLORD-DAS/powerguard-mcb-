@@ -14,15 +14,17 @@ export class CameraController {
     this.controls = new OrbitControls(this.camera, this.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.07;
-    this.controls.minDistance = 2.0;
-    this.controls.maxDistance = 32.0;
+    this.controls.minDistance = 0.8;
+    this.controls.maxDistance = 48.0;
     this.controls.maxPolarAngle = Math.PI / 2 + 0.05; // Keep ground plane oriented
 
     // Default overview position matching Master Reference Image framing
-    this.defaultCamPos = new THREE.Vector3(-0.35, 0.15, 14.2);
+    this.defaultCamPos = new THREE.Vector3(-0.35, 0.15, 15.8);
     this.defaultLookAt = new THREE.Vector3(-0.15, 0.0, 0);
 
     this.targetCamPos = this.defaultCamPos.clone();
+    this.controls.zoomSpeed = 1.25;
+    this.controls.panSpeed = 0.85;
     this.targetLookAt = this.defaultLookAt.clone();
     this.isTransitioning = false;
   }
