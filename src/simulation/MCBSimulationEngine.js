@@ -43,10 +43,53 @@ export class MCBSimulationEngine {
 
     // MCB Under Test (DUT) Engineering Configuration
     this.dutConfig = {
-      ratedCurrent: 16, // In = 6, 10, 16, 25, 32, 40, 63 A
-      poles: 'DP',      // 'SP', 'SPN', 'DP', 'TP', 'TPN', 'FP'
-      curve: 'C',       // 'B' (3-5 In), 'C' (5-10 In), 'D' (10-20 In)
-      breakingCapacityKA: 10 // 10 kA IEC 60898-1 standard
+      ratedCurrent: 16,
+      poles: 'DP',
+      curve: 'C',
+      breakingCapacityKA: 10
+    };
+
+    // Physical DUT configuration profiles. These values drive the 3D model
+    // as well as the electrical/trip simulation; the UI must not be cosmetic-only.
+    this.dutPoleProfiles = {
+      SP:  { poles: 1, neutral: false, label: 'Single Pole' },
+      SPN: { poles: 2, neutral: true,  label: 'Single Pole + Neutral' },
+      DP:  { poles: 2, neutral: false, label: 'Double Pole' },
+      DPN: { poles: 2, neutral: true,  label: 'Double Pole + Neutral' },
+      TP:  { poles: 3, neutral: false, label: 'Triple Pole' },
+      TPN: { poles: 4, neutral: true,  label: 'Triple Pole + Neutral' },
+      FP:  { poles: 4, neutral: false, label: 'Four Pole' },
+      PN:  { poles: 2, neutral: true,  label: 'Phase + Neutral' },
+      DC:  { poles: 2, neutral: false, label: 'DC Two Pole' }
+    };
+
+    this.dutRatedCurrents = [0.5, 1, 2, 4, 6, 10, 16, 20, 25, 32, 40, 50, 63];
+    this.dutCurveMultipliers = {
+      B: { min: 3, max: 5 },
+      C: { min: 5, max: 10 },
+      D: { min: 10, max: 20 },
+      K: { min: 8, max: 12 },
+      Z: { min: 2, max: 3 }
+    };
+
+    // Source specifications for the two dedicated transformer pathways.
+    // These are project simulation specifications, not a claim of physical compliance.
+    this.transformerSpecs = {
+      highCurrent: {
+        inputVoltage: 240, inputCurrent: 460,
+        outputVoltage: 10, outputCurrent: 11000,
+        apparentPowerKVA: 110
+      },
+      voltageStepUp: {
+        inputVoltage: 240, inputCurrent: 42,
+        outputVoltage: 450, outputCurrent: 22,
+        apparentPowerKVA: 10
+      }
+    };
+
+    this.sourceTelemetry = {
+      type: 'MAINS', inputVoltage: 230.4, outputVoltage: 230.4,
+      inputCurrent: 0, outputCurrent: 0
     };
 
     // MCB Under Test (DUT) Physical State
@@ -104,7 +147,7 @@ export class MCBSimulationEngine {
   // --- DUT Configuration Methods ---
 
   setDUTRatedCurrent(amps) {
-    const valid = [6, 10, 16, 25, 32, 40, 63];
+    const valid = this.dutRatedCurrents;
     if (valid.includes(amps)) {
       this.dutConfig.ratedCurrent = amps;
       soundFx.playSwitchClick(1.2);
@@ -114,7 +157,7 @@ export class MCBSimulationEngine {
   }
 
   setDUTPoles(poles) {
-    const valid = ['SP', 'SPN', 'DP', 'TP', 'TPN', 'FP'];
+    const valid = Object.keys(this.dutPoleProfiles);
     if (valid.includes(poles)) {
       this.dutConfig.poles = poles;
       soundFx.playSwitchClick(1.2);
@@ -124,11 +167,11 @@ export class MCBSimulationEngine {
   }
 
   setDUTCurve(curve) {
-    const valid = ['B', 'C', 'D'];
+    const valid = Object.keys(this.dutCurveMultipliers);
     if (valid.includes(curve)) {
       this.dutConfig.curve = curve;
       soundFx.playSwitchClick(1.2);
-      const mult = curve === 'B' ? '3-5x' : (curve === 'C' ? '5-10x' : '10-20x');
+      const mult = `${this.dutCurveMultipliers[curve].min}-${this.dutCurveMultipliers[curve].max}x`;
       this.statusText = `DUT CONFIG: TYPE ${curve} CURVE (MAGNETIC TRIP ${mult} In)`;
       if (this.onStateChange) this.onStateChange();
     }
@@ -323,7 +366,20 @@ export class MCBSimulationEngine {
     this.elapsedTestTime = 0;
     this.telemetry.tripTimeMs = null;
 
-    const baseV = 230.0 + (Math.random() * 2 - 1);
+    const mainsV = 230.0 + (Math.random() * 2 - 1);
+    const source = this.activePath === 1 ? this.transformerSpecs.highCurrent
+      : this.activePath === 2 ? this.transformerSpecs.voltageStepUp : null;
+    const baseV = source ? source.outputVoltage : mainsV;
+    this.sourceTelemetry = source ? {
+      type: this.activePath === 1 ? 'HIGH_CURRENT_TRANSFORMER' : 'VOLTAGE_STEP_UP_TRANSFORMER',
+      inputVoltage: source.inputVoltage,
+      inputCurrent: source.inputCurrent,
+      outputVoltage: source.outputVoltage,
+      outputCurrent: source.outputCurrent
+    } : {
+      type: 'DIRECT_PATH', inputVoltage: mainsV, inputCurrent: 0,
+      outputVoltage: mainsV, outputCurrent: 0
+    };
     this.telemetry.voltage = parseFloat(baseV.toFixed(1));
 
     const inRated = this.dutConfig.ratedCurrent;
@@ -335,7 +391,7 @@ export class MCBSimulationEngine {
     if (this.activePath === 1) {
       // PATH 1: HIGH CURRENT OVERLOAD TEST
       testType = 'HIGH CURRENT OVERLOAD TEST';
-      const calcCurrent = baseV / Math.max(this.impedance, 0.5);
+      const calcCurrent = Math.min(baseV / Math.max(this.impedance, 0.05), this.transformerSpecs.highCurrent.outputCurrent);
       this.telemetry.current = parseFloat(calcCurrent.toFixed(1));
       peakCurrent = this.telemetry.current * 1.414;
 
@@ -355,7 +411,7 @@ export class MCBSimulationEngine {
     } else if (this.activePath === 2) {
       // PATH 2: VOLTAGE WITHSTAND TEST
       testType = 'VOLTAGE WITHSTAND TEST';
-      this.telemetry.voltage = 1500.0 + Math.random() * 100;
+      this.telemetry.voltage = this.transformerSpecs.voltageStepUp.outputVoltage;
       this.telemetry.current = parseFloat((0.8 + Math.random() * 0.6).toFixed(2)); // mA leakage
       peakCurrent = 2.2;
       tripDelayMs = 2500; // Passes withstand test
@@ -367,16 +423,20 @@ export class MCBSimulationEngine {
 
       // Massive Prospective Fault Current: Isc_rms = V / Z
       const loopZ = Math.max(this.impedance, 0.05);
-      const iscRms = baseV / loopZ;
+      const iscRms = Math.min(baseV / loopZ, 10000);
       // Peak asymmetric fault current: Ip = sqrt(2) * Isc * kappa
       const kappa = 1.0 + Math.exp(-Math.PI * this.R / Math.max(2 * Math.PI * 50 * (this.XL * 1e-3), 0.01));
       peakCurrent = parseFloat((Math.sqrt(2) * iscRms * kappa).toFixed(1));
       this.telemetry.current = parseFloat(iscRms.toFixed(1));
       this.telemetry.peakCurrent = peakCurrent;
 
-      // Instantaneous Electromagnetic Solenoid Trip (< 20 ms, within 1 mains cycle)
-      // Curve B: 3-5 In, Curve C: 5-10 In, Curve D: 10-20 In
-      tripDelayMs = 7 + Math.random() * 8; // 7ms to 15ms sub-cycle trip!
+      // Characteristic-dependent magnetic trip model. B/C/D are core curves;
+      // K/Z are simulation extensions requested for the configurable DUT.
+      const curveBand = this.dutCurveMultipliers[this.dutConfig.curve] || this.dutCurveMultipliers.C;
+      const iRatio = this.telemetry.current / Math.max(inRated, 0.1);
+      if (iRatio >= curveBand.max) tripDelayMs = 7 + Math.random() * 8;
+      else if (iRatio >= curveBand.min) tripDelayMs = 12 + Math.random() * 18;
+      else tripDelayMs = 350 + Math.random() * 500;
 
       this.statusText = `FAULT APPLIED: ${testType} (Ip: ${(peakCurrent / 1000).toFixed(2)} kA)`;
     }
@@ -432,6 +492,9 @@ export class MCBSimulationEngine {
       pathId: this.activePath,
       mcbRating: `${this.dutConfig.ratedCurrent} A (Type ${this.dutConfig.curve})`,
       poles: this.dutConfig.poles,
+      source: this.sourceTelemetry.type,
+      sourceOutputVoltage: `${this.sourceTelemetry.outputVoltage.toFixed(1)} V`,
+      sourceOutputCurrent: `${this.sourceTelemetry.outputCurrent.toFixed(0)} A`,
       appliedVoltage: `${this.telemetry.voltage.toFixed(1)} V`,
       faultCurrentRms: `${faultCurrent.toFixed(1)} A`,
       peakCurrentIp: `${(peakCurrent >= 1000 ? (peakCurrent / 1000).toFixed(2) + ' kA' : peakCurrent.toFixed(0) + ' A')}`,
