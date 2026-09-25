@@ -323,15 +323,19 @@ export class WiringSystem {
     const isTesting = this.sim && this.sim.state === 'TESTING';
 
     if (this.flowMaterial) {
-      // Smooth technical electrical pulse fade
-      const targetOpacity = isTesting ? 0.75 : 0.0;
-      this.flowMaterial.opacity = THREE.MathUtils.lerp(
-        this.flowMaterial.opacity,
-        targetOpacity,
-        delta * 6.0
-      );
+      // Only the selected/active pathway may show electrical flow.
+      // The physical wiring for all four paths remains visible, but inactive
+      // paths must never appear energized during a test.
+      const activePath = this.sim?.activePath ?? null;
+      this.pulseTubes.forEach(tube => {
+        const pathId = tube.userData?.pathId;
+        const isActivePath = isTesting && pathId === activePath;
+        tube.visible = isActivePath;
+      });
 
-      // Animate flow texture offset along cable paths
+      // Keep the shared flow texture animation running only while a test is active.
+      // Visibility above is what enforces the one-path-at-a-time visual interlock.
+      this.flowMaterial.opacity = isTesting ? 0.75 : 0.0;
       if (this.flowTexture && isTesting) {
         this.flowTexture.offset.x = (this.flowTexture.offset.x - delta * 3.8) % 1.0;
       }
