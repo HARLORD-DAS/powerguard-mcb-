@@ -194,19 +194,23 @@ class DigitalTwinApp {
         this.sim.toggleInputMCB(ud.pathId);
         this.wiring.highlightPath(ud.pathId);
         this.showCallout(targetObj, hit.point);
-        targetObj.getWorldPosition(this.inspectedWorldPos);
-        this.camCtrl.focusOnComponent(this.inspectedWorldPos, 3.6);
         return;
       }
 
       // 4. Common R/XL Configuration Bank Click
       if (ud.type === 'RXL_BANK') {
-        // If click was in top half, cycle R; bottom half, cycle XL
-        if (hit.point.y > 0) {
-          this.sim.cycleResistance();
-        } else {
-          this.sim.cycleReactance();
-        }
+        if (hit.point.y > 0) this.sim.cycleResistance();
+        else this.sim.cycleReactance();
+        this.showCallout(targetObj, hit.point);
+        return;
+      }
+      if (ud.type === 'R_DIAL') {
+        this.sim.cycleResistance();
+        this.showCallout(targetObj, hit.point);
+        return;
+      }
+      if (ud.type === 'XL_DIAL') {
+        this.sim.cycleReactance();
         this.showCallout(targetObj, hit.point);
         return;
       }
@@ -224,13 +228,11 @@ class DigitalTwinApp {
       }
 
       // 6. MCB Under Test (DUT) Toggle Lever / Station Click
-      if (ud.type === 'MCB_DUT_STATION') {
+      if (ud.type === 'MCB_DUT_STATION' || ud.type === 'MCB_DUT_MODEL') {
         if (this.sim.dutState === 'TRIPPED') {
           this.sim.resetDUT();
         }
         this.showCallout(targetObj, hit.point);
-        targetObj.getWorldPosition(this.inspectedWorldPos);
-        this.camCtrl.focusOnComponent(this.inspectedWorldPos, 3.8);
         return;
       }
 
@@ -259,8 +261,6 @@ class DigitalTwinApp {
       // 10. DAQ & General Component Inspection (Transformers, Sensors, PLC, DAQ, Earth Bus)
       if (ud.type === 'HIGH_SPEED_DAQ' || ud.type === 'DATA_ACQUISITION') {
         this.showCallout(targetObj, hit.point);
-        targetObj.getWorldPosition(this.inspectedWorldPos);
-        this.camCtrl.focusOnComponent(this.inspectedWorldPos, 3.8);
         return;
       }
 
@@ -361,11 +361,12 @@ class DigitalTwinApp {
         desc = `Authentic 1-Pole Modular DIN Miniature Circuit Breaker (MCB).\n• Rating: ${rating} | 240V~ 50Hz | 10000A Breaking Capacity\n• Operating Handle: Blue ribbed toggle rocker switch (${posText})\n• Status Window: ${flagText}\n• Line Connection (Top): Screw clamp from wireway feed\n• Load Connection (Bottom): Screw clamp to test pathway\n• Pathway Interlock: ${mcb.state === 'ON' ? 'ARMED (Ready to test)' : 'ISOLATED'}\n\nClick blue toggle lever in 3D scene to switch ON / OFF.`;
         if (operateBtn) operateBtn.textContent = `Flip Switch ${mcb.state === 'ON' ? 'OFF' : 'ON'}`;
       }
-    } else if (ud.type === 'MCB_DUT_STATION') {
+    } else if (ud.type === 'MCB_DUT_STATION' || ud.type === 'MCB_DUT_MODEL') {
       category = 'MCB UNDER TEST (DUT)';
       name = `MCB Under Test — ${this.sim.dutConfig.ratedCurrent}A Curve ${this.sim.dutConfig.curve} (${this.sim.dutConfig.poles})`;
       const isTripped = this.sim.dutState === 'TRIPPED';
-      desc = `3-Pole Miniature Circuit Breaker under test in Arc Containment Zone.\n• Handle State: ${isTripped ? 'TRIPPED (Down 45°)' : 'ARMED / CLOSED (Up 0°)'}\n• Rating: In = ${this.sim.dutConfig.ratedCurrent} A, Curve ${this.sim.dutConfig.curve}, Poles: ${this.sim.dutConfig.poles}\n• Breaking Capacity: 10 kA (IEC 60898-1)\n• Arc Containment: Polycarbonate safety blast shield active.\n\nConfigure parameters below or click handle in 3D scene to reset.`;
+      const profile = this.sim.dutPoleProfiles[this.sim.dutConfig.poles];
+      desc = `${profile ? profile.label : this.sim.dutConfig.poles} physical MCB under test in Arc Containment Zone.\n• Handle State: ${isTripped ? 'TRIPPED (Down 45°)' : 'ARMED / CLOSED (Up 0°)'}\n• Rating: In = ${this.sim.dutConfig.ratedCurrent} A, Curve ${this.sim.dutConfig.curve}, Poles: ${this.sim.dutConfig.poles}\n• Breaking Capacity: 10 kA (IEC 60898-1)\n• Arc Containment: Polycarbonate safety blast shield active.\n\nConfigure parameters below or click handle in 3D scene to reset.`;
       
       if (dutCfgEl) {
         dutCfgEl.classList.remove('hidden');
@@ -418,7 +419,7 @@ class DigitalTwinApp {
   syncDUTConfigChips() {
     // Sync Rated Current
     document.querySelectorAll('#cfg-in-chips .cfg-chip').forEach(chip => {
-      const val = parseInt(chip.dataset.in);
+      const val = parseFloat(chip.dataset.in);
       chip.classList.toggle('active', val === this.sim.dutConfig.ratedCurrent);
     });
     // Sync Curve
@@ -533,10 +534,9 @@ class DigitalTwinApp {
     });
 
     document.getElementById('callout-focus-btn').addEventListener('click', () => {
-      if (this.inspectedObject) {
-        this.inspectedObject.getWorldPosition(this.inspectedWorldPos);
-        this.camCtrl.focusOnComponent(this.inspectedWorldPos, 3.8);
-      }
+      // Selection information is intentionally camera-neutral. The user controls
+      // orbit/pan/zoom manually with OrbitControls and mouse/trackpad input.
+      this.updateCalloutContent();
     });
 
     document.getElementById('callout-operate-btn').addEventListener('click', () => {

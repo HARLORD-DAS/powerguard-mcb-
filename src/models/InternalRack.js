@@ -31,6 +31,10 @@ export class InternalRack {
     this.xlDial = null;
     this.dutLever = null;
     this.dutLeverPivot = null;
+    this.dutModelGroup = null;
+    this.dutDynamicCasingMeshes = [];
+    this.dutDynamicXrayGroup = null;
+    this.lastDutConfigKey = null;
     this.switchArms = [];
 
     // Assembly Groups for Exploded View
@@ -854,7 +858,7 @@ export class InternalRack {
           type: 'HIGH_CURRENT_TRANSFORMER',
           name: 'High-Current Injection Transformer',
           category: 'Current Injection',
-          desc: 'High-power toroidal low-voltage transformer injecting up to 100A calibrated test current for thermal-magnetic overload tripping.'
+          desc: 'Path 1 custom high-current transformer. Project specification: 240 V AC input, approximately 460 A input current, 10 V AC output, approximately 11,000 A output current, approximately 110 kVA.'
         };
         pGrp.add(hcTrans);
         this.interactiveObjects.push(hcTrans);
@@ -883,7 +887,7 @@ export class InternalRack {
           type: 'VOLTAGE_TRANSFORMER',
           name: 'Precision Voltage Transformer',
           category: 'Voltage Testing Section',
-          desc: 'Precision potential transformer with copper windings delivering stabilized 230V reference potential.'
+          desc: 'Path 2 voltage step-up transformer. Project specification: 240 V AC input, approximately 42 A input current, 450 V AC output, 22 A output current, approximately 10 kVA.'
         };
         pGrp.add(vTrans);
         this.interactiveObjects.push(vTrans);
@@ -1051,7 +1055,9 @@ export class InternalRack {
     rGroup.add(rPointer);
 
     this.rDial = rGroup;
+    rGroup.userData = { type: 'R_DIAL', name: 'Resistance R Control', category: 'Common R / XL', desc: 'Physical resistance selector for the single common R/XL bank. Click to cycle R values.' };
     grp.add(rGroup);
+    this.interactiveObjects.push(rGroup);
 
     // 2. Interactive Reactance Dial (XL)
     const xlGroup = new THREE.Group();
@@ -1072,7 +1078,9 @@ export class InternalRack {
     xlGroup.add(xlPointer);
 
     this.xlDial = xlGroup;
+    xlGroup.userData = { type: 'XL_DIAL', name: 'Reactance XL Control', category: 'Common R / XL', desc: 'Physical reactance selector for the single common R/XL bank. Click to cycle XL values.' };
     grp.add(xlGroup);
+    this.interactiveObjects.push(xlGroup);
 
     // 8 Brass studs row below XL dial (matching reference image)
     for (let s = 0; s < 8; s++) {
@@ -1271,60 +1279,13 @@ export class InternalRack {
     din.position.set(0, 0, 0.08);
     grp.add(din);
 
-    // 3-Pole Industrial MCB Under Test Body
-    const dutBody = new THREE.Mesh(
-      new THREE.BoxGeometry(0.95, 1.4, 0.5),
-      new THREE.MeshStandardMaterial({
-        map: TextureGenerator.createDUTTexture(),
-        roughness: 0.35,
-        metalness: 0.1
-      })
-    );
-    dutBody.position.set(0, 0, 0.32);
-    grp.add(dutBody);
-    this.casingMeshes.push(dutBody);
-
-    // Terminal clamp ports (top & bottom)
-    [-0.3, 0, 0.3].forEach(px => {
-      dutBody.add(this.createScrew(px, 0.55, 0.15, 0.04, true));
-      dutBody.add(this.createScrew(px, -0.55, 0.15, 0.04, true));
-    });
-
-    // MCB Operating Toggle Handle (Flips between UP [ON] and DOWN [TRIPPED])
-    this.dutLeverPivot = new THREE.Group();
-    this.dutLeverPivot.position.set(0, 0.05, 0.58);
-
-    const lever = new THREE.Mesh(
-      new THREE.BoxGeometry(0.3, 0.42, 0.16),
-      new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.35 })
-    );
-    lever.position.set(0, 0.12, 0);
-    this.dutLeverPivot.add(lever);
-    this.dutLever = lever;
-    grp.add(this.dutLeverPivot);
-
-    // Internal X-Ray Breaker Mechanism
-    const dutXray = new THREE.Group();
-    for (let c = 0; c < 3; c++) {
-      const cx = -0.3 + c * 0.3;
-      // Copper contact arm
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 0.06), this.copperMat);
-      arm.position.set(cx, 0, 0.2);
-      dutXray.add(arm);
-      // Solenoid
-      const sol = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.25, 12), this.copperMat);
-      sol.position.set(cx, 0.25, 0.2);
-      dutXray.add(sol);
-      // Arc chute splitter plates
-      for (let ap = 0; ap < 6; ap++) {
-        const plate = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.18), this.dinRailMat);
-        plate.position.set(cx, -0.2 - ap * 0.04, 0.2);
-        dutXray.add(plate);
-      }
-    }
-    dutXray.visible = false;
-    grp.add(dutXray);
-    this.internalXrayMeshes.push(dutXray);
+    // Dynamic interchangeable MCB Under Test model.
+    // The physical DUT is rebuilt from the selected configuration rather than
+    // changing only labels in the callout UI.
+    this.dutModelGroup = new THREE.Group();
+    this.dutModelGroup.position.set(0, 0, 0);
+    grp.add(this.dutModelGroup);
+    this.updateDUTModel(this.sim.dutConfig);
 
     // Transparent Arc Containment Safety Shield (covers lower section matching reference photo)
     const shieldGeo = new THREE.PlaneGeometry(1.5, 2.1);
@@ -1363,9 +1324,113 @@ export class InternalRack {
       type: 'MCB_DUT_STATION',
       name: 'MCB Under Test (DUT) Station',
       category: 'Testing Chamber',
-      desc: 'High-current testing station with 3-pole miniature circuit breaker under test, solid copper busbars, and transparent Arc Containment Zone. Click to operate breaker handle.'
+      desc: 'Interchangeable MCB Under Test station. The installed physical breaker changes geometry, pole count, terminals and mechanism when SP/SPN/DP/DPN/TP/TPN/FP/PN/DC is selected.'
     };
     this.interactiveObjects.push(grp);
+  }
+
+  // -------------------------------------------------------------
+  // DYNAMIC INTERCHANGEABLE DUT MCB MODEL
+  // -------------------------------------------------------------
+  updateDUTModel(config) {
+    if (!this.dutModelGroup || !config) return;
+
+    const key = config.poles + '|' + config.ratedCurrent + '|' + config.curve;
+    if (this.lastDutConfigKey === key) return;
+    this.lastDutConfigKey = key;
+
+    this.dutDynamicCasingMeshes.forEach(mesh => {
+      const idx = this.casingMeshes.indexOf(mesh);
+      if (idx >= 0) this.casingMeshes.splice(idx, 1);
+    });
+    this.dutDynamicCasingMeshes = [];
+    if (this.dutDynamicXrayGroup) {
+      const idx = this.internalXrayMeshes.indexOf(this.dutDynamicXrayGroup);
+      if (idx >= 0) this.internalXrayMeshes.splice(idx, 1);
+    }
+    this.dutModelGroup.clear();
+    this.dutLever = null;
+    this.dutLeverPivot = null;
+
+    const profile = this.sim.dutPoleProfiles[config.poles] || this.sim.dutPoleProfiles.DP;
+    const poleCount = profile.poles;
+    const moduleWidth = 0.38;
+    const bodyW = Math.max(moduleWidth, poleCount * moduleWidth);
+    const bodyH = 1.4;
+    const bodyD = 0.5;
+    const spacing = bodyW / poleCount;
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(bodyW, bodyH, bodyD), new THREE.MeshStandardMaterial({
+      map: TextureGenerator.createDUTTexture(), roughness: 0.35, metalness: 0.1
+    }));
+    body.position.set(0, 0, 0.32);
+    this.dutModelGroup.add(body);
+    this.casingMeshes.push(body);
+    this.dutDynamicCasingMeshes.push(body);
+
+    for (let p = 0; p < poleCount; p++) {
+      const px = -bodyW / 2 + spacing / 2 + p * spacing;
+      const topShoulder = new THREE.Mesh(new THREE.BoxGeometry(spacing * 0.92, 0.22, 0.18), this.mcbPlasticMat);
+      topShoulder.position.set(px, 0.34, 0.18);
+      this.dutModelGroup.add(topShoulder);
+      this.casingMeshes.push(topShoulder);
+      this.dutDynamicCasingMeshes.push(topShoulder);
+      topShoulder.add(this.createScrew(0, 0, 0.08, 0.04, true));
+
+      const bottomShoulder = new THREE.Mesh(new THREE.BoxGeometry(spacing * 0.92, 0.22, 0.18), this.mcbPlasticMat);
+      bottomShoulder.position.set(px, -0.34, 0.18);
+      this.dutModelGroup.add(bottomShoulder);
+      this.casingMeshes.push(bottomShoulder);
+      this.dutDynamicCasingMeshes.push(bottomShoulder);
+      bottomShoulder.add(this.createScrew(0, 0, 0.08, 0.04, true));
+
+      const topConductor = new THREE.Mesh(new THREE.BoxGeometry(spacing * 0.5, 0.48, 0.035), this.copperMat);
+      topConductor.position.set(px, 0.76, 0.12);
+      this.dutModelGroup.add(topConductor);
+      const bottomConductor = topConductor.clone();
+      bottomConductor.position.y = -0.76;
+      this.dutModelGroup.add(bottomConductor);
+    }
+
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(bodyW, 0.46, 0.22), this.mcbPlasticMat);
+    nose.position.set(0, 0, 0.29);
+    this.dutModelGroup.add(nose);
+    this.casingMeshes.push(nose);
+    this.dutDynamicCasingMeshes.push(nose);
+
+    this.dutLeverPivot = new THREE.Group();
+    this.dutLeverPivot.position.set(0, 0.05, 0.58);
+    const lever = new THREE.Mesh(new THREE.BoxGeometry(Math.min(0.30, bodyW * 0.72), 0.42, 0.16), new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.35 }));
+    lever.position.set(0, 0.12, 0);
+    this.dutLeverPivot.add(lever);
+    this.dutModelGroup.add(this.dutLeverPivot);
+    this.dutLever = lever;
+
+    const xray = new THREE.Group();
+    for (let p = 0; p < poleCount; p++) {
+      const px = -bodyW / 2 + spacing / 2 + p * spacing;
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 0.06), this.copperMat);
+      arm.position.set(px, 0, 0.2); xray.add(arm);
+      const sol = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.25, 12), this.copperMat);
+      sol.position.set(px, 0.25, 0.2); xray.add(sol);
+      for (let ap = 0; ap < 6; ap++) {
+        const plate = new THREE.Mesh(new THREE.BoxGeometry(Math.min(0.12, spacing * 0.65), 0.02, 0.18), this.dinRailMat);
+        plate.position.set(px, -0.2 - ap * 0.04, 0.2); xray.add(plate);
+      }
+    }
+    xray.visible = !!this.sim.isXray;
+    this.dutModelGroup.add(xray);
+    this.dutDynamicXrayGroup = xray;
+    this.internalXrayMeshes.push(xray);
+
+    this.dutModelGroup.userData = {
+      type: 'MCB_DUT_MODEL',
+      name: config.poles + ' MCB Under Test — ' + config.ratedCurrent + 'A Curve ' + config.curve,
+      category: 'Interchangeable DUT',
+      poles: config.poles, ratedCurrent: config.ratedCurrent, curve: config.curve,
+      desc: profile.label + ' physical DUT with ' + poleCount + ' modeled pole(s), terminal sets, linked operating mechanism and configurable trip characteristic.'
+    };
+    if (!this.interactiveObjects.includes(this.dutModelGroup)) this.interactiveObjects.push(this.dutModelGroup);
   }
 
   // -------------------------------------------------------------
@@ -1621,7 +1686,10 @@ export class InternalRack {
       this.xlDial.rotation.z = THREE.MathUtils.lerp(this.xlDial.rotation.z, targetXlAngle, delta * 6.0);
     }
 
-    // 3. Update MCB DUT Lever angle (snaps down when tripped) & color
+    // 3. Rebuild the physical DUT only when its configuration changes.
+    this.updateDUTModel(this.sim.dutConfig);
+
+    // 4. Update MCB DUT Lever angle (snaps down when tripped) & color
     if (this.dutLeverPivot) {
       this.dutLeverPivot.rotation.x = THREE.MathUtils.lerp(
         this.dutLeverPivot.rotation.x,
