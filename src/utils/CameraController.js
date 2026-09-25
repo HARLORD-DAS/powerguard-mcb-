@@ -27,7 +27,7 @@ export class CameraController {
     this.isTransitioning = false;
   }
 
-  // Selection must never move the camera. Manual OrbitControls input is
+  // Selection must never move or zoom the camera. Manual OrbitControls input is
   // the only way to zoom/orbit/pan toward a selected component.
   focusOnComponent() {
     return;
