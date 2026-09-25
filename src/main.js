@@ -239,7 +239,7 @@ class DigitalTwinApp {
         this.showCallout(targetObj, hit.point);
         return;
       }
-      if (ud.type === 'MCB_DUT_STATION' || ud.type === 'MCB_DUT_MODEL') {
+      if (ud.type === 'MCB_DUT_STATION' || ud.type === 'MCB_DUT_MODEL' || ud.type === 'MCB_DUT_POLE' || ud.type === 'MCB_DUT_POLE_TOGGLE') {
         if (this.sim.dutState === 'TRIPPED') {
           this.sim.resetDUT();
         }
@@ -606,7 +606,7 @@ class DigitalTwinApp {
           this.wiring.highlightPath(pathId);
         }
         this.sim.toggleSwitch(pathId);
-      } else if (ud.type === 'MCB_DUT_STATION' || ud.type === 'MCB_DUT_MODEL' || ud.type === 'MCB_DUT_POLE_TOGGLE') {
+      } else if (ud.type === 'MCB_DUT_STATION' || ud.type === 'MCB_DUT_MODEL' || ud.type === 'MCB_DUT_POLE' || ud.type === 'MCB_DUT_POLE_TOGGLE') {
         if (this.sim.dutState === 'TRIPPED') {
           this.sim.resetDUT();
         } else {
@@ -686,11 +686,16 @@ class DigitalTwinApp {
       this.calloutEl.style.display = 'block';
     }
 
-    const x = (pos.x * 0.5 + 0.5) * window.innerWidth;
-    const y = (-(pos.y * 0.5) + 0.5) * window.innerHeight;
-
-    this.calloutEl.style.left = `${Math.round(x)}px`;
-    this.calloutEl.style.top = `${Math.round(y)}px`;
+    // Stable engineering parameter panel: selection never moves the camera or panel.
+    const panelWidth = Math.min(430, Math.max(340, window.innerWidth * 0.30));
+    const rightMargin = 18;
+    const topMargin = 76;
+    const left = Math.max(12, window.innerWidth - panelWidth - rightMargin);
+    this.calloutEl.style.left = (Math.round(left + panelWidth / 2)) + 'px';
+    this.calloutEl.style.top = topMargin + 'px';
+    this.calloutEl.style.transform = 'translate(-50%, 0)';
+    this.calloutEl.style.maxHeight = Math.max(360, window.innerHeight - topMargin - 76) + 'px';
+    this.calloutEl.style.overflowY = 'auto';
   }
 
   onWindowResize() {
