@@ -1329,7 +1329,111 @@ export class InternalRack {
     this.interactiveObjects.push(grp);
   }
 
-  // -------------------------------------------------------------\n  // DYNAMIC INTERCHANGEABLE DUT MCB MODEL\n  // -------------------------------------------------------------\n  updateDUTModel(config) {\n    if (!this.dutModelGroup || !config) return;\n\n    const key = config.poles + '|' + config.ratedCurrent + '|' + config.curve;\n    if (this.lastDutConfigKey === key) return;\n    this.lastDutConfigKey = key;\n\n    this.dutDynamicCasingMeshes.forEach(mesh => {\n      const idx = this.casingMeshes.indexOf(mesh);\n      if (idx >= 0) this.casingMeshes.splice(idx, 1);\n    });\n    this.dutDynamicCasingMeshes = [];\n    if (this.dutDynamicXrayGroup) {\n      const idx = this.internalXrayMeshes.indexOf(this.dutDynamicXrayGroup);\n      if (idx >= 0) this.internalXrayMeshes.splice(idx, 1);\n    }\n    this.dutModelGroup.clear();\n    this.dutLever = null;\n    this.dutLeverPivot = null;\n\n    const profile = this.sim.dutPoleProfiles[config.poles] || this.sim.dutPoleProfiles.DP;\n    const poleCount = profile.poles;\n    const moduleWidth = 0.38;\n    const bodyW = Math.max(moduleWidth, poleCount * moduleWidth);\n    const bodyH = 1.4;\n    const bodyD = 0.5;\n    const spacing = bodyW / poleCount;\n\n    const body = new THREE.Mesh(new THREE.BoxGeometry(bodyW, bodyH, bodyD), new THREE.MeshStandardMaterial({\n      map: TextureGenerator.createDUTTexture(), roughness: 0.35, metalness: 0.1\n    }));\n    body.position.set(0, 0, 0.32);\n    this.dutModelGroup.add(body);\n    this.casingMeshes.push(body);\n    this.dutDynamicCasingMeshes.push(body);\n\n    for (let p = 0; p < poleCount; p++) {\n      const px = -bodyW / 2 + spacing / 2 + p * spacing;\n      const topShoulder = new THREE.Mesh(new THREE.BoxGeometry(spacing * 0.92, 0.22, 0.18), this.mcbPlasticMat);\n      topShoulder.position.set(px, 0.34, 0.18);\n      this.dutModelGroup.add(topShoulder);\n      this.casingMeshes.push(topShoulder);\n      this.dutDynamicCasingMeshes.push(topShoulder);\n      topShoulder.add(this.createScrew(0, 0, 0.08, 0.04, true));\n\n      const bottomShoulder = new THREE.Mesh(new THREE.BoxGeometry(spacing * 0.92, 0.22, 0.18), this.mcbPlasticMat);\n      bottomShoulder.position.set(px, -0.34, 0.18);\n      this.dutModelGroup.add(bottomShoulder);\n      this.casingMeshes.push(bottomShoulder);\n      this.dutDynamicCasingMeshes.push(bottomShoulder);\n      bottomShoulder.add(this.createScrew(0, 0, 0.08, 0.04, true));\n\n      const topConductor = new THREE.Mesh(new THREE.BoxGeometry(spacing * 0.5, 0.48, 0.035), this.copperMat);\n      topConductor.position.set(px, 0.76, 0.12);\n      this.dutModelGroup.add(topConductor);\n      const bottomConductor = topConductor.clone();\n      bottomConductor.position.y = -0.76;\n      this.dutModelGroup.add(bottomConductor);\n    }\n\n    const nose = new THREE.Mesh(new THREE.BoxGeometry(bodyW, 0.46, 0.22), this.mcbPlasticMat);\n    nose.position.set(0, 0, 0.29);\n    this.dutModelGroup.add(nose);\n    this.casingMeshes.push(nose);\n    this.dutDynamicCasingMeshes.push(nose);\n\n    this.dutLeverPivot = new THREE.Group();\n    this.dutLeverPivot.position.set(0, 0.05, 0.58);\n    const lever = new THREE.Mesh(new THREE.BoxGeometry(Math.min(0.30, bodyW * 0.72), 0.42, 0.16), new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.35 }));\n    lever.position.set(0, 0.12, 0);\n    this.dutLeverPivot.add(lever);\n    this.dutModelGroup.add(this.dutLeverPivot);\n    this.dutLever = lever;\n\n    const xray = new THREE.Group();\n    for (let p = 0; p < poleCount; p++) {\n      const px = -bodyW / 2 + spacing / 2 + p * spacing;\n      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 0.06), this.copperMat);\n      arm.position.set(px, 0, 0.2); xray.add(arm);\n      const sol = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.25, 12), this.copperMat);\n      sol.position.set(px, 0.25, 0.2); xray.add(sol);\n      for (let ap = 0; ap < 6; ap++) {\n        const plate = new THREE.Mesh(new THREE.BoxGeometry(Math.min(0.12, spacing * 0.65), 0.02, 0.18), this.dinRailMat);\n        plate.position.set(px, -0.2 - ap * 0.04, 0.2); xray.add(plate);\n      }\n    }\n    xray.visible = !!this.sim.isXray;\n    this.dutModelGroup.add(xray);\n    this.dutDynamicXrayGroup = xray;\n    this.internalXrayMeshes.push(xray);\n\n    this.dutModelGroup.userData = {\n      type: 'MCB_DUT_MODEL',\n      name: config.poles + ' MCB Under Test — ' + config.ratedCurrent + 'A Curve ' + config.curve,\n      category: 'Interchangeable DUT',\n      poles: config.poles, ratedCurrent: config.ratedCurrent, curve: config.curve,\n      desc: profile.label + ' physical DUT with ' + poleCount + ' modeled pole(s), terminal sets, linked operating mechanism and configurable trip characteristic.'\n    };\n    if (!this.interactiveObjects.includes(this.dutModelGroup)) this.interactiveObjects.push(this.dutModelGroup);\n  }\n\n  // -------------------------------------------------------------
+  // -------------------------------------------------------------
+  // DYNAMIC INTERCHANGEABLE DUT MCB MODEL
+  // -------------------------------------------------------------
+  updateDUTModel(config) {
+    if (!this.dutModelGroup || !config) return;
+
+    const key = config.poles + '|' + config.ratedCurrent + '|' + config.curve;
+    if (this.lastDutConfigKey === key) return;
+    this.lastDutConfigKey = key;
+
+    this.dutDynamicCasingMeshes.forEach(mesh => {
+      const idx = this.casingMeshes.indexOf(mesh);
+      if (idx >= 0) this.casingMeshes.splice(idx, 1);
+    });
+    this.dutDynamicCasingMeshes = [];
+    if (this.dutDynamicXrayGroup) {
+      const idx = this.internalXrayMeshes.indexOf(this.dutDynamicXrayGroup);
+      if (idx >= 0) this.internalXrayMeshes.splice(idx, 1);
+    }
+    this.dutModelGroup.clear();
+    this.dutLever = null;
+    this.dutLeverPivot = null;
+
+    const profile = this.sim.dutPoleProfiles[config.poles] || this.sim.dutPoleProfiles.DP;
+    const poleCount = profile.poles;
+    const moduleWidth = 0.38;
+    const bodyW = Math.max(moduleWidth, poleCount * moduleWidth);
+    const bodyH = 1.4;
+    const bodyD = 0.5;
+    const spacing = bodyW / poleCount;
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(bodyW, bodyH, bodyD), new THREE.MeshStandardMaterial({
+      map: TextureGenerator.createDUTTexture(), roughness: 0.35, metalness: 0.1
+    }));
+    body.position.set(0, 0, 0.32);
+    this.dutModelGroup.add(body);
+    this.casingMeshes.push(body);
+    this.dutDynamicCasingMeshes.push(body);
+
+    for (let p = 0; p < poleCount; p++) {
+      const px = -bodyW / 2 + spacing / 2 + p * spacing;
+      const topShoulder = new THREE.Mesh(new THREE.BoxGeometry(spacing * 0.92, 0.22, 0.18), this.mcbPlasticMat);
+      topShoulder.position.set(px, 0.34, 0.18);
+      this.dutModelGroup.add(topShoulder);
+      this.casingMeshes.push(topShoulder);
+      this.dutDynamicCasingMeshes.push(topShoulder);
+      topShoulder.add(this.createScrew(0, 0, 0.08, 0.04, true));
+
+      const bottomShoulder = new THREE.Mesh(new THREE.BoxGeometry(spacing * 0.92, 0.22, 0.18), this.mcbPlasticMat);
+      bottomShoulder.position.set(px, -0.34, 0.18);
+      this.dutModelGroup.add(bottomShoulder);
+      this.casingMeshes.push(bottomShoulder);
+      this.dutDynamicCasingMeshes.push(bottomShoulder);
+      bottomShoulder.add(this.createScrew(0, 0, 0.08, 0.04, true));
+
+      const topConductor = new THREE.Mesh(new THREE.BoxGeometry(spacing * 0.5, 0.48, 0.035), this.copperMat);
+      topConductor.position.set(px, 0.76, 0.12);
+      this.dutModelGroup.add(topConductor);
+      const bottomConductor = topConductor.clone();
+      bottomConductor.position.y = -0.76;
+      this.dutModelGroup.add(bottomConductor);
+    }
+
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(bodyW, 0.46, 0.22), this.mcbPlasticMat);
+    nose.position.set(0, 0, 0.29);
+    this.dutModelGroup.add(nose);
+    this.casingMeshes.push(nose);
+    this.dutDynamicCasingMeshes.push(nose);
+
+    this.dutLeverPivot = new THREE.Group();
+    this.dutLeverPivot.position.set(0, 0.05, 0.58);
+    const lever = new THREE.Mesh(new THREE.BoxGeometry(Math.min(0.30, bodyW * 0.72), 0.42, 0.16), new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.35 }));
+    lever.position.set(0, 0.12, 0);
+    this.dutLeverPivot.add(lever);
+    this.dutModelGroup.add(this.dutLeverPivot);
+    this.dutLever = lever;
+
+    const xray = new THREE.Group();
+    for (let p = 0; p < poleCount; p++) {
+      const px = -bodyW / 2 + spacing / 2 + p * spacing;
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 0.06), this.copperMat);
+      arm.position.set(px, 0, 0.2); xray.add(arm);
+      const sol = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.25, 12), this.copperMat);
+      sol.position.set(px, 0.25, 0.2); xray.add(sol);
+      for (let ap = 0; ap < 6; ap++) {
+        const plate = new THREE.Mesh(new THREE.BoxGeometry(Math.min(0.12, spacing * 0.65), 0.02, 0.18), this.dinRailMat);
+        plate.position.set(px, -0.2 - ap * 0.04, 0.2); xray.add(plate);
+      }
+    }
+    xray.visible = !!this.sim.isXray;
+    this.dutModelGroup.add(xray);
+    this.dutDynamicXrayGroup = xray;
+    this.internalXrayMeshes.push(xray);
+
+    this.dutModelGroup.userData = {
+      type: 'MCB_DUT_MODEL',
+      name: config.poles + ' MCB Under Test — ' + config.ratedCurrent + 'A Curve ' + config.curve,
+      category: 'Interchangeable DUT',
+      poles: config.poles, ratedCurrent: config.ratedCurrent, curve: config.curve,
+      desc: profile.label + ' physical DUT with ' + poleCount + ' modeled pole(s), terminal sets, linked operating mechanism and configurable trip characteristic.'
+    };
+    if (!this.interactiveObjects.includes(this.dutModelGroup)) this.interactiveObjects.push(this.dutModelGroup);
+  }
+
+  // -------------------------------------------------------------
   // BOTTOM MEASUREMENT & OUTPUT TIER
   // -------------------------------------------------------------
   initBottomMeasurementTier() {
