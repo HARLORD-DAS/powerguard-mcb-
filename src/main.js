@@ -452,6 +452,34 @@ class DigitalTwinApp {
     });
   }
 
+  syncTestConditionUI() {
+    const cfg = this.sim.testConfig;
+    document.querySelectorAll('#cfg-testtype-chips .cfg-chip').forEach(chip => {
+      chip.classList.toggle('active', chip.dataset.testtype === cfg.type);
+    });
+    const setValue = (id, value) => {
+      const el = document.getElementById(id);
+      if (!el || document.activeElement === el) return;
+      el.value = value === null || value === undefined ? '' : value;
+    };
+    setValue('cfg-test-voltage', cfg.appliedVoltage);
+    setValue('cfg-test-current', cfg.targetCurrent);
+    setValue('cfg-test-r', cfg.customR);
+    setValue('cfg-test-xl', cfg.customXL);
+    setValue('cfg-test-duration', cfg.durationSec);
+    const z = document.getElementById('cfg-test-z');
+    const pf = document.getElementById('cfg-test-pf');
+    const ratio = document.getElementById('cfg-test-ratio');
+    if (z) z.textContent = this.sim.impedance.toFixed(3) + ' Ω';
+    if (pf) pf.textContent = this.sim.powerFactor.toFixed(3);
+    if (ratio) ratio.textContent = this.sim.currentRatio.toFixed(2) + '×';
+    const evalEl = document.getElementById('cfg-test-evaluation');
+    if (evalEl) {
+      if (this.sim.testEvaluation) evalEl.textContent = this.sim.testEvaluation.status + ' — ' + this.sim.testEvaluation.reason;
+      else evalEl.textContent = 'EXPECTED: ' + cfg.type.replaceAll('_', ' ') + ' — configure the test and execute';
+      evalEl.className = 'test-evaluation ' + ((this.sim.testEvaluation?.status || 'READY').toLowerCase());
+    }
+  }
   renderWaveformCanvas() {
     const canvas = document.getElementById('waveform-canvas');
     if (!canvas) return;
