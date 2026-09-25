@@ -208,9 +208,9 @@ export class MCBSimulationEngine {
   setTestType(type) {
     const valid = ['OVERLOAD', 'INSTANTANEOUS', 'SHORT_CIRCUIT', 'BREAKING_CAPACITY', 'VOLTAGE_WITHSTAND'];
     if (!valid.includes(type)) return;
-    this.testConfig.type = type;
     const pathMap = { OVERLOAD: 1, INSTANTANEOUS: 3, SHORT_CIRCUIT: 3, BREAKING_CAPACITY: 3, VOLTAGE_WITHSTAND: 2 };
     this.selectPath(pathMap[type]);
+    this.testConfig.type = type;
     this.statusText = 'TEST TYPE: ' + type.replaceAll('_', ' ');
     if (this.onStateChange) this.onStateChange();
   }
