@@ -163,7 +163,11 @@ export class MCBSimulationEngine {
   }
 
   get shortCircuitPowerFactorRange() {
-    const i = Math.max(0, this.telemetry.current);
+    return this.getShortCircuitPowerFactorRange(this.telemetry.current);
+  }
+
+  getShortCircuitPowerFactorRange(current) {
+    const i = Math.max(0, Number(current) || 0);
     if (i <= 1500) return [0.93, 0.98];
     if (i <= 3000) return [0.85, 0.90];
     if (i <= 4500) return [0.75, 0.80];
@@ -279,10 +283,10 @@ export class MCBSimulationEngine {
     let expected = 'REVIEW';
     let reason = 'Condition is between defined simulation acceptance boundaries.';
     if (type === 'SHORT_CIRCUIT' || type === 'BREAKING_CAPACITY') {
-      const range = this.shortCircuitPowerFactorRange;
+      const range = this.getShortCircuitPowerFactorRange(current);
       if (this.powerFactor < range[0] || this.powerFactor > range[1]) {
         this.statusText = 'TEST CONDITION INVALID: PF ' + this.powerFactor.toFixed(3) + ' OUTSIDE REQUIRED ' + range[0].toFixed(2) + '–' + range[1].toFixed(2) + ' RANGE';
-        this.testEvaluation = { status: 'FAIL', expected: 'VALID_TEST_CONDITION', ratio: iRatio, reason: 'Short-circuit power factor is outside the configured IEC 60898-1 test-circuit range.' };
+        this.testEvaluation = { status: 'FAIL', expected: 'VALID_TEST_CONDITION', ratio, reason: 'Short-circuit power factor is outside the configured IEC 60898-1 test-circuit range.' };
         this.switches.highCurrent = false; this.switches.voltage = false; this.switches.scLive = false; this.switches.scNeutral = false;
         this.state = 'COMPLETE'; this.telemetry.current = 0;
         if (this.onStateChange) this.onStateChange();
