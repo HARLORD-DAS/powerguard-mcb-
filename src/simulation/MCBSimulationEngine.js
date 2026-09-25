@@ -212,10 +212,13 @@ export class MCBSimulationEngine {
   setTestType(type) {
     const valid = ['OVERLOAD', 'INSTANTANEOUS', 'SHORT_CIRCUIT', 'BREAKING_CAPACITY', 'VOLTAGE_WITHSTAND'];
     if (!valid.includes(type)) return;
-    const pathMap = { OVERLOAD: 1, INSTANTANEOUS: 3, SHORT_CIRCUIT: 3, BREAKING_CAPACITY: 3, VOLTAGE_WITHSTAND: 2 };
-    this.selectPath(pathMap[type]);
+
+    // Test Type is a procedure/configuration choice, not a physical pathway.
+    // Keep the currently selected path unchanged; the operator/PLC configures
+    // the test type independently of the physical route.
     this.testConfig.type = type;
-    this.statusText = 'TEST TYPE: ' + type.replaceAll('_', ' ');
+    this.testEvaluation = null;
+    this.statusText = 'TEST TYPE: ' + type.replaceAll('_', ' ') + ' — PATH ' + this.activePath + ' SELECTED';
     if (this.onStateChange) this.onStateChange();
   }
 
@@ -387,9 +390,9 @@ export class MCBSimulationEngine {
 
     soundFx.playSwitchClick(1.05);
     this.activePath = pathId;
-    if (pathId === 1) this.testConfig.type = 'OVERLOAD';
-    else if (pathId === 2) this.testConfig.type = 'VOLTAGE_WITHSTAND';
-    else if (pathId === 3 || pathId === 4) this.testConfig.type = 'SHORT_CIRCUIT';
+    // Path selection changes only the physical electrical route. Do not overwrite
+    // the operator-selected test procedure.
+    this.testEvaluation = null;
 
     // Strict Hardware/Software Interlock: Open all switches immediately
     this.switches.highCurrent = false;
@@ -398,8 +401,8 @@ export class MCBSimulationEngine {
     this.switches.scNeutral = false;
 
     const names = [
-      'HIGH CURRENT OVERLOAD PATH',
-      'VOLTAGE WITHSTAND PATH',
+      'HIGH CURRENT PATH',
+      'VOLTAGE TEST PATH',
       'SHORT CIRCUIT LIVE PATH',
       'SHORT CIRCUIT NEUTRAL PATH'
     ];
