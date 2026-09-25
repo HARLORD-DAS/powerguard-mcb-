@@ -424,7 +424,9 @@ class DigitalTwinApp {
       : (this.sim.state === 'TRIPPED' ? 'val-red' : 'val-green');
 
     document.getElementById('callout-stat-v').textContent = `${this.sim.telemetry.voltage.toFixed(1)} V`;
-    document.getElementById('callout-stat-i').textContent = `${this.sim.telemetry.current.toFixed(1)} A`;
+    const currentUnit = this.sim.testConfig?.type === 'VOLTAGE_WITHSTAND' ? ' mA' : ' A';
+    const currentDigits = this.sim.testConfig?.type === 'VOLTAGE_WITHSTAND' ? 2 : 1;
+    document.getElementById('callout-stat-i').textContent = `${this.sim.telemetry.current.toFixed(currentDigits)}${currentUnit}`;
     const pfEl = document.getElementById('callout-stat-pf');
     if (pfEl) pfEl.textContent = this.sim.powerFactor.toFixed(3);
     const resultEl = document.getElementById('callout-stat-result');
