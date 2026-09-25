@@ -27,13 +27,13 @@
     <div id="callout-dut-config" class="callout-dut-config hidden">
       <div class="config-title">DUT Parameter Configuration</div>
       <div class="config-row"><span class="cfg-lbl">Rated Current (In):</span><div class="cfg-chips" id="cfg-in-chips">
-        <button class="cfg-chip" data-in="6">6A</button><button class="cfg-chip" data-in="10">10A</button><button class="cfg-chip active" data-in="16">16A</button><button class="cfg-chip" data-in="25">25A</button><button class="cfg-chip" data-in="32">32A</button><button class="cfg-chip" data-in="63">63A</button>
+        <button class="cfg-chip" data-in="0.5">0.5A</button><button class="cfg-chip" data-in="1">1A</button><button class="cfg-chip" data-in="2">2A</button><button class="cfg-chip" data-in="4">4A</button><button class="cfg-chip" data-in="6">6A</button><button class="cfg-chip" data-in="10">10A</button><button class="cfg-chip active" data-in="16">16A</button><button class="cfg-chip" data-in="20">20A</button><button class="cfg-chip" data-in="25">25A</button><button class="cfg-chip" data-in="32">32A</button><button class="cfg-chip" data-in="40">40A</button><button class="cfg-chip" data-in="50">50A</button><button class="cfg-chip" data-in="63">63A</button>
       </div></div>
       <div class="config-row"><span class="cfg-lbl">Trip Curve:</span><div class="cfg-chips" id="cfg-curve-chips">
-        <button class="cfg-chip" data-curve="B">B (3-5 In)</button><button class="cfg-chip active" data-curve="C">C (5-10 In)</button><button class="cfg-chip" data-curve="D">D (10-20 In)</button>
+        <button class="cfg-chip" data-curve="B">B (3-5 In)</button><button class="cfg-chip active" data-curve="C">C (5-10 In)</button><button class="cfg-chip" data-curve="D">D (10-20 In)</button><button class="cfg-chip" data-curve="K">K</button><button class="cfg-chip" data-curve="Z">Z</button>
       </div></div>
       <div class="config-row"><span class="cfg-lbl">Poles:</span><div class="cfg-chips" id="cfg-poles-chips">
-        <button class="cfg-chip" data-poles="SP">SP</button><button class="cfg-chip" data-poles="SPN">SPN</button><button class="cfg-chip active" data-poles="DP">DP</button><button class="cfg-chip" data-poles="TP">TP</button><button class="cfg-chip" data-poles="FP">FP</button>
+        <button class="cfg-chip" data-poles="SP">SP</button><button class="cfg-chip" data-poles="SPN">SPN</button><button class="cfg-chip active" data-poles="DP">DP</button><button class="cfg-chip" data-poles="DPN">DPN</button><button class="cfg-chip" data-poles="TP">TP</button><button class="cfg-chip" data-poles="TPN">TPN</button><button class="cfg-chip" data-poles="FP">FP</button><button class="cfg-chip" data-poles="PN">PN</button><button class="cfg-chip" data-poles="DC">DC</button>
       </div></div>
     </div>
     <div id="callout-waveform-container" class="callout-waveform-container hidden">
@@ -43,7 +43,7 @@
       <canvas id="waveform-canvas" width="380" height="140"></canvas>
       <div class="waveform-legend"><span class="legend-i">Current i(t) [A]</span><span class="legend-v">Voltage v(t) [V]</span></div>
     </div>
-    <div class="callout-actions"><button class="callout-btn" id="callout-focus-btn">Focus Inspection</button><button class="callout-btn action-btn" id="callout-operate-btn">Operate / Toggle</button></div>
+    <div class="callout-actions"><button class="callout-btn" id="callout-focus-btn">Selection Info</button><button class="callout-btn action-btn" id="callout-operate-btn">Operate / Toggle</button></div>
   </div>
   <div class="hotkey-bar" id="hotkey-bar">
     <div class="hotkey-item"><span class="key">Space</span><span class="action">Run / Stop Test</span></div>
