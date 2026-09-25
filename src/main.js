@@ -555,7 +555,7 @@ class DigitalTwinApp {
           this.wiring.highlightPath(pathId);
         }
         this.sim.toggleSwitch(pathId);
-      } else if (ud.type === 'MCB_DUT_STATION') {
+      } else if (ud.type === 'MCB_DUT_STATION' || ud.type === 'MCB_DUT_MODEL' || ud.type === 'MCB_DUT_POLE_TOGGLE') {
         if (this.sim.dutState === 'TRIPPED') {
           this.sim.resetDUT();
         } else {
@@ -570,7 +570,7 @@ class DigitalTwinApp {
     // DUT Config Chips Listeners
     document.querySelectorAll('#cfg-in-chips .cfg-chip').forEach(chip => {
       chip.addEventListener('click', () => {
-        this.sim.setDUTRatedCurrent(parseInt(chip.dataset.in));
+        this.sim.setDUTRatedCurrent(parseFloat(chip.dataset.in));
         this.syncDUTConfigChips();
         this.updateCalloutContent();
       });
