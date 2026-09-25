@@ -227,7 +227,18 @@ class DigitalTwinApp {
         return;
       }
 
-      // 6. MCB Under Test (DUT) Toggle Lever / Station Click
+      // 6. MCB Under Test (DUT) physical handle / station interaction.
+      // Every pole handle is a real interactive control; all linked handles
+      // operate the same DUT mechanism together.
+      if (ud.type === 'MCB_DUT_POLE_TOGGLE') {
+        if (this.sim.dutState === 'TRIPPED') {
+          this.sim.resetDUT();
+        } else {
+          this.sim.startTest();
+        }
+        this.showCallout(targetObj, hit.point);
+        return;
+      }
       if (ud.type === 'MCB_DUT_STATION' || ud.type === 'MCB_DUT_MODEL') {
         if (this.sim.dutState === 'TRIPPED') {
           this.sim.resetDUT();
@@ -264,9 +275,8 @@ class DigitalTwinApp {
         return;
       }
 
+      // Selection is camera-neutral. The user controls orbit/pan/zoom manually.
       this.showCallout(targetObj, hit.point);
-      targetObj.getWorldPosition(this.inspectedWorldPos);
-      this.camCtrl.focusOnComponent(this.inspectedWorldPos, 4.5);
     } else {
       // Click on background -> Reset view and dismiss callout
       this.dismissCallout();
