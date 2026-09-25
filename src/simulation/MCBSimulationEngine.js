@@ -356,8 +356,12 @@ export class MCBSimulationEngine {
       result: this.testEvaluation.status, resultReason: this.testEvaluation.reason,
       breakingStatus: 'NO TRIP — CONTACTS REMAIN CLOSED'
     };
+    // The test contactor has opened, so live telemetry must return to zero.
+    // Preserve the completed measurement in lastTestReport/lastWaveform rather than
+    // leaving the HMI showing current after the source has been isolated.
+    this.telemetry.current = 0.0;
     this.state = 'COMPLETE';
-    this.statusText = 'TEST ' + this.testEvaluation.status + ': ' + testType.replaceAll('_', ' ') + ' — NO TRIP';
+    this.statusText = 'TEST ' + this.testEvaluation.status + ': ' + testType.replaceAll('_', ' ') + ' — NO TRIP / SOURCE ISOLATED';
     if (this.onStateChange) this.onStateChange();
   }
 
