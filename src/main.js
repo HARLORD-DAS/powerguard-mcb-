@@ -381,6 +381,7 @@ class DigitalTwinApp {
       if (dutCfgEl) {
         dutCfgEl.classList.remove('hidden');
         this.syncDUTConfigChips();
+        this.syncTestConditionUI();
       }
       if (operateBtn) {
         operateBtn.textContent = isTripped ? 'Reset DUT Handle' : 'Execute Test';
@@ -400,7 +401,7 @@ class DigitalTwinApp {
     } else if (ud.type === 'RXL_BANK') {
       category = 'PROGRAMMABLE IMPEDANCE';
       name = 'Common R / XL Configuration Bank';
-      desc = `Shared load impedance bank for all 4 testing branches.\n• Resistance R: ${this.sim.R} Ω\n• Reactance XL: ${this.sim.XL} mH (50 Hz)\n• Loop Impedance Z: ${this.sim.impedance.toFixed(3)} Ω\n\nClick R dial (top) or XL dial (bottom) in 3D scene to cycle values.`;
+      desc = `Shared load impedance bank for all 4 testing branches.\n• Resistance R: ${this.sim.R} Ω\n• Reactance XL: ${this.sim.XL} mH (50 Hz)\n• Loop Impedance Z: ${this.sim.impedance.toFixed(3)} Ω\n• Power Factor: ${this.sim.powerFactor.toFixed(3)}\n\nClick R dial (top) or XL dial (bottom) in 3D scene to cycle values, or enter precise HMI values in the DUT test-condition panel.`;
       if (operateBtn) operateBtn.textContent = 'Cycle R / XL';
     } else if (ud.type === 'POWER_SWITCH') {
       category = 'HIGH-POWER SWITCHING';
@@ -423,7 +424,18 @@ class DigitalTwinApp {
       : (this.sim.state === 'TRIPPED' ? 'val-red' : 'val-green');
 
     document.getElementById('callout-stat-v').textContent = `${this.sim.telemetry.voltage.toFixed(1)} V`;
-    document.getElementById('callout-stat-i').textContent = `${this.sim.telemetry.current.toFixed(1)} A`;
+    const currentUnit = this.sim.testConfig?.type === 'VOLTAGE_WITHSTAND' ? ' mA' : ' A';
+    const currentDigits = this.sim.testConfig?.type === 'VOLTAGE_WITHSTAND' ? 2 : 1;
+    document.getElementById('callout-stat-i').textContent = `${this.sim.telemetry.current.toFixed(currentDigits)}${currentUnit}`;
+    const pfEl = document.getElementById('callout-stat-pf');
+    if (pfEl) pfEl.textContent = this.sim.powerFactor.toFixed(3);
+    const resultEl = document.getElementById('callout-stat-result');
+    if (resultEl) {
+      const result = this.sim.testEvaluation?.status || (this.sim.state === 'TRIPPED' ? 'TRIPPED' : 'READY');
+      resultEl.textContent = result;
+      resultEl.className = result === 'PASS' ? 'val-green' : (result === 'FAIL' ? 'val-red' : (result === 'REVIEW' ? 'val-amber' : 'val-green'));
+    }
+    this.syncTestConditionUI();
   }
 
   syncDUTConfigChips() {
@@ -442,6 +454,35 @@ class DigitalTwinApp {
     });
   }
 
+  syncTestConditionUI() {
+    const cfg = this.sim.testConfig;
+    document.querySelectorAll('#cfg-testtype-chips .cfg-chip').forEach(chip => {
+      chip.classList.toggle('active', chip.dataset.testtype === cfg.type);
+    });
+    const setValue = (id, value) => {
+      const el = document.getElementById(id);
+      if (!el || document.activeElement === el) return;
+      el.value = value === null || value === undefined ? '' : value;
+    };
+    setValue('cfg-test-voltage', cfg.appliedVoltage);
+    setValue('cfg-test-current', cfg.targetCurrent);
+    setValue('cfg-test-r', cfg.customR);
+    setValue('cfg-test-xl', cfg.customXL);
+    setValue('cfg-test-pf-target', cfg.targetPowerFactor);
+    setValue('cfg-test-duration', cfg.durationSec);
+    const z = document.getElementById('cfg-test-z');
+    const pf = document.getElementById('cfg-test-pf');
+    const ratio = document.getElementById('cfg-test-ratio');
+    if (z) z.textContent = this.sim.impedance.toFixed(3) + ' Ω';
+    if (pf) pf.textContent = this.sim.powerFactor.toFixed(3);
+    if (ratio) ratio.textContent = this.sim.currentRatio.toFixed(2) + '×';
+    const evalEl = document.getElementById('cfg-test-evaluation');
+    if (evalEl) {
+      if (this.sim.testEvaluation) evalEl.textContent = this.sim.testEvaluation.status + ' — ' + this.sim.testEvaluation.reason;
+      else evalEl.textContent = 'EXPECTED: ' + cfg.type.replaceAll('_', ' ') + ' — configure the test and execute';
+      evalEl.className = 'test-evaluation ' + ((this.sim.testEvaluation?.status || 'READY').toLowerCase());
+    }
+  }
   renderWaveformCanvas() {
     const canvas = document.getElementById('waveform-canvas');
     if (!canvas) return;
@@ -576,6 +617,33 @@ class DigitalTwinApp {
       }
       this.updateCalloutContent();
     });
+
+    // Test-condition controls
+    document.querySelectorAll('#cfg-testtype-chips .cfg-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        this.sim.setTestType(chip.dataset.testtype);
+        this.wiring.highlightPath(this.sim.activePath);
+        this.syncTestConditionUI();
+        this.updateCalloutContent();
+      });
+    });
+
+    const bindNumber = (id, setter) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('change', () => {
+        if (el.value === '') return;
+        setter.call(this.sim, parseFloat(el.value));
+        this.syncTestConditionUI();
+        this.updateCalloutContent();
+      });
+    };
+    bindNumber('cfg-test-voltage', this.sim.setAppliedVoltage);
+    bindNumber('cfg-test-current', this.sim.setTargetCurrent);
+    bindNumber('cfg-test-r', this.sim.setTestResistance);
+    bindNumber('cfg-test-xl', this.sim.setTestReactance);
+    bindNumber('cfg-test-pf-target', this.sim.setTestPowerFactor);
+    bindNumber('cfg-test-duration', this.sim.setTestDuration);
 
     // DUT Config Chips Listeners
     document.querySelectorAll('#cfg-in-chips .cfg-chip').forEach(chip => {

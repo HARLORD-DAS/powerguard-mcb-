@@ -114,6 +114,17 @@ export class MCBSimulationEngine {
     this.lastWaveform = null;
     this.lastTestReport = null;
 
+    this.testConfig = {
+      type: 'OVERLOAD',
+      appliedVoltage: null,
+      targetCurrent: null,
+      durationSec: 5,
+      customR: null,
+      customXL: null,
+      targetPowerFactor: null
+    };
+    this.testEvaluation = null;
+
     // View States
     this.isExploded = false;
     this.explodedProgress = 0;
@@ -131,17 +142,34 @@ export class MCBSimulationEngine {
   // --- Electrical Impedance & Current Calculations ---
 
   get R() {
-    return this.rValues[this.selectedRIndex];
+    return this.testConfig.customR !== null ? this.testConfig.customR : this.rValues[this.selectedRIndex];
   }
 
   get XL() {
-    return this.xlValues[this.selectedXlIndex];
+    return this.testConfig.customXL !== null ? this.testConfig.customXL : this.xlValues[this.selectedXlIndex];
   }
 
   get impedance() {
-    // Z = sqrt(R^2 + (2*pi*f*L)^2) with f = 50Hz, L in H (XL in mH * 1e-3)
     const omegaL = 2 * Math.PI * 50 * (this.XL * 1e-3);
     return Math.sqrt(this.R * this.R + omegaL * omegaL);
+  }
+
+  get powerFactor() {
+    return this.R / Math.max(this.impedance, 1e-9);
+  }
+
+  get currentRatio() {
+    return this.telemetry.current / Math.max(this.dutConfig.ratedCurrent, 0.1);
+  }
+
+  get shortCircuitPowerFactorRange() {
+    const i = Math.max(0, this.telemetry.current);
+    if (i <= 1500) return [0.93, 0.98];
+    if (i <= 3000) return [0.85, 0.90];
+    if (i <= 4500) return [0.75, 0.80];
+    if (i <= 6000) return [0.65, 0.70];
+    if (i <= 10000) return [0.45, 0.50];
+    return [0.20, 0.25];
   }
 
   // --- DUT Configuration Methods ---
@@ -177,6 +205,158 @@ export class MCBSimulationEngine {
     }
   }
 
+  setTestType(type) {
+    const valid = ['OVERLOAD', 'INSTANTANEOUS', 'SHORT_CIRCUIT', 'BREAKING_CAPACITY', 'VOLTAGE_WITHSTAND'];
+    if (!valid.includes(type)) return;
+    const pathMap = { OVERLOAD: 1, INSTANTANEOUS: 3, SHORT_CIRCUIT: 3, BREAKING_CAPACITY: 3, VOLTAGE_WITHSTAND: 2 };
+    this.selectPath(pathMap[type]);
+    this.testConfig.type = type;
+    this.statusText = 'TEST TYPE: ' + type.replaceAll('_', ' ');
+    if (this.onStateChange) this.onStateChange();
+  }
+
+  setAppliedVoltage(value) {
+    const v = Number(value);
+    if (!Number.isFinite(v) || v < 0 || v > 440) return;
+    this.testConfig.appliedVoltage = v;
+    this.statusText = 'TEST CONDITION: APPLIED VOLTAGE = ' + v.toFixed(1) + ' V';
+    if (this.onStateChange) this.onStateChange();
+  }
+
+  setTargetCurrent(value) {
+    const i = Number(value);
+    if (!Number.isFinite(i) || i < 0 || i > 10000) return;
+    this.testConfig.targetCurrent = i;
+    this.statusText = 'TEST CONDITION: TARGET CURRENT = ' + i.toFixed(1) + ' A';
+    if (this.onStateChange) this.onStateChange();
+  }
+
+  setTestDuration(value) {
+    const s = Number(value);
+    if (!Number.isFinite(s) || s < 0.1 || s > 3600) return;
+    this.testConfig.durationSec = s;
+    this.statusText = 'TEST CONDITION: DURATION = ' + s.toFixed(1) + ' s';
+    if (this.onStateChange) this.onStateChange();
+  }
+
+  setTestResistance(value) {
+    const r = Number(value);
+    if (!Number.isFinite(r) || r <= 0 || r > 1000) return;
+    this.testConfig.customR = r;
+    this.statusText = 'COMMON R/XL: R = ' + r.toFixed(4) + ' Ω';
+    if (this.onStateChange) this.onStateChange();
+  }
+
+  setTestReactance(value) {
+    const xl = Number(value);
+    if (!Number.isFinite(xl) || xl < 0 || xl > 1000) return;
+    this.testConfig.customXL = xl;
+    this.statusText = 'COMMON R/XL: XL = ' + xl.toFixed(4) + ' mH';
+    if (this.onStateChange) this.onStateChange();
+  }
+
+  setTestPowerFactor(value) {
+    const pf = Number(value);
+    if (!Number.isFinite(pf) || pf <= 0 || pf > 1) return;
+    this.testConfig.targetPowerFactor = pf;
+    const resistive = this.R;
+    const inductiveReactanceOhm = resistive * Math.sqrt(Math.max((1 / (pf * pf)) - 1, 0));
+    this.testConfig.customXL = (inductiveReactanceOhm / (2 * Math.PI * 50)) * 1000;
+    this.statusText = 'TEST CONDITION: TARGET PF = ' + pf.toFixed(3) + ' (XL recalculated)';
+    if (this.onStateChange) this.onStateChange();
+  }
+  clearCustomImpedance() {
+    this.testConfig.customR = null;
+    this.testConfig.customXL = null;
+    this.testConfig.targetPowerFactor = null;
+    this.statusText = 'COMMON R/XL BANK: R = ' + this.R + ' Ω, XL = ' + this.XL + ' mH';
+    if (this.onStateChange) this.onStateChange();
+  }
+
+  evaluateTestResult({ tripped, testType, current, tripTimeMs = null, leakageMA = null }) {
+    const type = testType || this.testConfig.type;
+    const ratio = current / Math.max(this.dutConfig.ratedCurrent, 0.1);
+    let expected = 'REVIEW';
+    let reason = 'Condition is between defined simulation acceptance boundaries.';
+    if (type === 'SHORT_CIRCUIT' || type === 'BREAKING_CAPACITY') {
+      const range = this.shortCircuitPowerFactorRange;
+      if (this.powerFactor < range[0] || this.powerFactor > range[1]) {
+        this.statusText = 'TEST CONDITION INVALID: PF ' + this.powerFactor.toFixed(3) + ' OUTSIDE REQUIRED ' + range[0].toFixed(2) + '–' + range[1].toFixed(2) + ' RANGE';
+        this.testEvaluation = { status: 'FAIL', expected: 'VALID_TEST_CONDITION', ratio: iRatio, reason: 'Short-circuit power factor is outside the configured IEC 60898-1 test-circuit range.' };
+        this.switches.highCurrent = false; this.switches.voltage = false; this.switches.scLive = false; this.switches.scNeutral = false;
+        this.state = 'COMPLETE'; this.telemetry.current = 0;
+        if (this.onStateChange) this.onStateChange();
+        return;
+      }
+    }
+    if (type === 'OVERLOAD') {
+      if (ratio <= 1.13) { expected = 'NO_TRIP'; reason = 'At or below the conventional 1.13 × In non-tripping check.'; }
+      else if (ratio >= 1.45) { expected = 'TRIP'; reason = 'At or above the conventional 1.45 × In tripping check.'; }
+      else { expected = 'REVIEW'; reason = 'Between 1.13 × In and 1.45 × In; no automatic verdict.'; }
+    } else if (type === 'INSTANTANEOUS' || type === 'SHORT_CIRCUIT') {
+      const band = this.dutCurveMultipliers[this.dutConfig.curve] || this.dutCurveMultipliers.C;
+      expected = ratio >= band.min ? 'TRIP' : 'NO_TRIP';
+      reason = ratio >= band.min ? 'Current is at/above the configured curve magnetic band.' : 'Current is below the configured curve magnetic band.';
+    } else if (type === 'BREAKING_CAPACITY') {
+      const capacityA = this.dutConfig.breakingCapacityKA * 1000;
+      expected = 'TRIP';
+      reason = 'Prospective current is evaluated against the configured breaking-capacity model.';
+      if (current > capacityA) return { status: 'FAIL', expected, ratio, reason: 'Prospective current exceeds the configured breaking-capacity model.', tripTimeMs };
+    } else if (type === 'VOLTAGE_WITHSTAND') {
+      expected = 'NO_TRIP';
+      const leakagePass = Number.isFinite(leakageMA) && leakageMA <= 2.0;
+      return { status: !tripped && leakagePass ? 'PASS' : 'FAIL', expected, ratio, reason: leakagePass ? 'Leakage remains within the simulation withstand threshold.' : 'Leakage exceeds the simulation withstand threshold or the DUT tripped.', tripTimeMs };
+    }
+    const status = expected === 'REVIEW' ? 'REVIEW' : ((expected === 'TRIP' && tripped) || (expected === 'NO_TRIP' && !tripped) ? 'PASS' : 'FAIL');
+    return { status, expected, ratio, reason, tripTimeMs };
+  }
+
+  generateSteadyDAQWaveform(durationMs, nominalV, rmsCurrent) {
+    const points = [];
+    const totalDurationMs = Math.min(Math.max(durationMs, 50), 5000);
+    const numSamples = 500;
+    const dt = totalDurationMs / numSamples;
+    const omega = 2 * Math.PI * 50;
+    for (let k = 0; k < numSamples; k++) {
+      const tMs = k * dt;
+      const tSec = tMs * 1e-3;
+      points.push({ t: parseFloat(tMs.toFixed(2)), i: parseFloat((rmsCurrent * Math.SQRT2 * Math.sin(omega * tSec)).toFixed(1)), v: parseFloat((nominalV * Math.SQRT2 * Math.sin(omega * tSec)).toFixed(1)) });
+    }
+    this.lastWaveform = points;
+  }
+
+  completeNoTrip(testType, peakCurrent = 0, leakageMA = null) {
+    soundFx.stopTransformerHum();
+    soundFx.playContactorThunk();
+    this.switches.highCurrent = false; this.switches.voltage = false; this.switches.scLive = false; this.switches.scNeutral = false;
+    const current = this.telemetry.current;
+    this.telemetry.tripTimeMs = null;
+    this.telemetry.peakCurrent = peakCurrent;
+    this.telemetry.letThroughI2t = 0;
+    this.generateSteadyDAQWaveform(this.testConfig.durationSec * 1000, this.telemetry.voltage, current);
+    this.testEvaluation = this.evaluateTestResult({ tripped: false, testType, current, leakageMA });
+    this.lastTestReport = {
+      testType, pathId: this.activePath,
+      mcbRating: this.dutConfig.ratedCurrent + ' A (Type ' + this.dutConfig.curve + ')',
+      poles: this.dutConfig.poles, source: this.sourceTelemetry.type,
+      sourceOutputVoltage: this.sourceTelemetry.outputVoltage.toFixed(1) + ' V',
+      sourceOutputCurrent: this.sourceTelemetry.outputCurrent.toFixed(0) + ' A',
+      appliedVoltage: this.telemetry.voltage.toFixed(1) + ' V',
+      peakCurrentIp: peakCurrent >= 1000 ? (peakCurrent / 1000).toFixed(2) + ' kA' : peakCurrent.toFixed(1) + ' A',
+      tripTime: 'NO TRIP',
+      letThroughEnergy: '0 A²s',
+      faultCurrentRms: testType === 'VOLTAGE_WITHSTAND' ? current.toFixed(2) + ' mA leakage' : current.toFixed(1) + ' A',
+      currentRatio: testType === 'VOLTAGE_WITHSTAND' ? 'N/A' : (current / Math.max(this.dutConfig.ratedCurrent, 0.1)).toFixed(2) + ' x In',
+      powerFactor: this.powerFactor.toFixed(3), rSetting: this.R + ' Ω', xlSetting: this.XL + ' mH',
+      impedance: this.impedance.toFixed(3) + ' Ω', expectedResult: this.testEvaluation.expected,
+      result: this.testEvaluation.status, resultReason: this.testEvaluation.reason,
+      breakingStatus: 'NO TRIP — CONTACTS REMAIN CLOSED'
+    };
+    this.state = 'COMPLETE';
+    this.statusText = 'TEST ' + this.testEvaluation.status + ': ' + testType.replaceAll('_', ' ') + ' — NO TRIP';
+    if (this.onStateChange) this.onStateChange();
+  }
+
   // Reset DUT Handle (Direct physical interaction)
   resetDUT() {
     soundFx.playSwitchClick(1.1);
@@ -199,6 +379,9 @@ export class MCBSimulationEngine {
 
     soundFx.playSwitchClick(1.05);
     this.activePath = pathId;
+    if (pathId === 1) this.testConfig.type = 'OVERLOAD';
+    else if (pathId === 2) this.testConfig.type = 'VOLTAGE_WITHSTAND';
+    else if (pathId === 3 || pathId === 4) this.testConfig.type = 'SHORT_CIRCUIT';
 
     // Strict Hardware/Software Interlock: Open all switches immediately
     this.switches.highCurrent = false;
@@ -289,6 +472,8 @@ export class MCBSimulationEngine {
   // Click Resistance (R) Dial
   cycleResistance() {
     soundFx.playSwitchClick(0.85);
+    this.testConfig.customR = null;
+    this.testConfig.targetPowerFactor = null;
     this.selectedRIndex = (this.selectedRIndex + 1) % this.rValues.length;
     this.updateCalculatedCurrent();
     this.statusText = `COMMON R/XL: R = ${this.R} Ω, XL = ${this.XL} mH (Z = ${this.impedance.toFixed(3)} Ω)`;
@@ -298,6 +483,8 @@ export class MCBSimulationEngine {
   // Click Reactance (XL) Dial
   cycleReactance() {
     soundFx.playSwitchClick(0.85);
+    this.testConfig.customXL = null;
+    this.testConfig.targetPowerFactor = null;
     this.selectedXlIndex = (this.selectedXlIndex + 1) % this.xlValues.length;
     this.updateCalculatedCurrent();
     this.statusText = `COMMON R/XL: R = ${this.R} Ω, XL = ${this.XL} mH (Z = ${this.impedance.toFixed(3)} Ω)`;
@@ -353,104 +540,56 @@ export class MCBSimulationEngine {
   }
 
   executeEnergizedTest() {
-    // Step 2: Close High-Power Switch for the single active pathway
-    this.switches.highCurrent = (this.activePath === 1);
-    this.switches.voltage = (this.activePath === 2);
-    this.switches.scLive = (this.activePath === 3);
-    this.switches.scNeutral = (this.activePath === 4);
-
+    this.switches.highCurrent = this.activePath === 1;
+    this.switches.voltage = this.activePath === 2;
+    this.switches.scLive = this.activePath === 3;
+    this.switches.scNeutral = this.activePath === 4;
     soundFx.playContactorThunk();
     soundFx.startTransformerHum();
-
-    this.state = 'TESTING';
-    this.elapsedTestTime = 0;
-    this.telemetry.tripTimeMs = null;
-
+    this.state = 'TESTING'; this.elapsedTestTime = 0; this.telemetry.tripTimeMs = null; this.testEvaluation = null;
     const mainsV = 230.0 + (Math.random() * 2 - 1);
-    const source = this.activePath === 1 ? this.transformerSpecs.highCurrent
-      : this.activePath === 2 ? this.transformerSpecs.voltageStepUp : null;
-    const baseV = source ? source.outputVoltage : mainsV;
-    this.sourceTelemetry = source ? {
-      type: this.activePath === 1 ? 'HIGH_CURRENT_TRANSFORMER' : 'VOLTAGE_STEP_UP_TRANSFORMER',
-      inputVoltage: source.inputVoltage,
-      inputCurrent: source.inputCurrent,
-      outputVoltage: source.outputVoltage,
-      outputCurrent: source.outputCurrent
-    } : {
-      type: 'DIRECT_PATH', inputVoltage: mainsV, inputCurrent: 0,
-      outputVoltage: mainsV, outputCurrent: 0
-    };
+    const source = this.activePath === 1 ? this.transformerSpecs.highCurrent : this.activePath === 2 ? this.transformerSpecs.voltageStepUp : null;
+    const configuredV = this.testConfig.appliedVoltage;
+    const defaultV = source ? source.outputVoltage : mainsV;
+    const baseV = configuredV !== null ? configuredV : Math.min(defaultV, 440);
+    this.sourceTelemetry = source ? { type: this.activePath === 1 ? 'HIGH_CURRENT_TRANSFORMER' : 'VOLTAGE_STEP_UP_TRANSFORMER', inputVoltage: source.inputVoltage, inputCurrent: source.inputCurrent, outputVoltage: source.outputVoltage, outputCurrent: source.outputCurrent } : { type: 'DIRECT_PATH', inputVoltage: mainsV, inputCurrent: 0, outputVoltage: mainsV, outputCurrent: 0 };
     this.telemetry.voltage = parseFloat(baseV.toFixed(1));
-
-    const inRated = this.dutConfig.ratedCurrent;
-    let tripDelayMs = 2000;
-    let peakCurrent = 0;
-    let testType = '';
-
-    // Branch logic per Pathway:
-    if (this.activePath === 1) {
-      // PATH 1: HIGH CURRENT OVERLOAD TEST
-      testType = 'HIGH CURRENT OVERLOAD TEST';
-      const calcCurrent = Math.min(baseV / Math.max(this.impedance, 0.05), this.transformerSpecs.highCurrent.outputCurrent);
-      this.telemetry.current = parseFloat(calcCurrent.toFixed(1));
-      peakCurrent = this.telemetry.current * 1.414;
-
-      const iRatio = this.telemetry.current / inRated;
-      // Inverse time trip curve
-      if (iRatio >= 10.0) {
-        tripDelayMs = 50 + Math.random() * 40;
-      } else if (iRatio >= 5.0) {
-        tripDelayMs = 250 + Math.random() * 150;
-      } else if (iRatio >= 1.5) {
-        tripDelayMs = 1200 + Math.random() * 600;
-      } else {
-        tripDelayMs = 3500;
+    const inRated = this.dutConfig.ratedCurrent; const type = this.testConfig.type; let tripDelayMs = 2000; let peakCurrent = 0; const curveBand = this.dutCurveMultipliers[this.dutConfig.curve] || this.dutCurveMultipliers.C;
+    if (type === 'VOLTAGE_WITHSTAND') {
+      const leakage = parseFloat((0.8 + Math.random() * 0.6).toFixed(2));
+      this.telemetry.current = leakage; this.telemetry.peakCurrent = leakage;
+      tripDelayMs = Math.max(1, this.testConfig.durationSec) * 1000;
+      this.statusText = 'TEST RUNNING: VOLTAGE WITHSTAND (' + this.telemetry.voltage.toFixed(1) + ' V, ' + leakage.toFixed(2) + ' mA leakage)';
+      this.testTimer = setTimeout(() => { if (this.state === 'TESTING') this.completeNoTrip(type, leakage, leakage); }, Math.min(tripDelayMs, 3600000));
+      if (this.onStateChange) this.onStateChange(); return;
+    }
+    let calcCurrent = this.testConfig.targetCurrent !== null ? this.testConfig.targetCurrent : (type === 'BREAKING_CAPACITY' ? this.dutConfig.breakingCapacityKA * 1000 : baseV / Math.max(this.impedance, 0.05));
+    calcCurrent = Math.min(calcCurrent, type === 'OVERLOAD' ? this.transformerSpecs.highCurrent.outputCurrent : 10000);
+    this.telemetry.current = parseFloat(calcCurrent.toFixed(1));
+    peakCurrent = this.telemetry.current * 1.414; this.telemetry.peakCurrent = peakCurrent;
+    const iRatio = this.telemetry.current / Math.max(inRated, 0.1);
+    if (type === 'OVERLOAD') {
+      if (iRatio <= 1.45) {
+        tripDelayMs = this.testConfig.durationSec * 1000;
+        this.statusText = 'TEST RUNNING: OVERLOAD ' + (iRatio <= 1.13 ? 'NO-TRIP' : 'REVIEW') + ' CHECK (' + this.telemetry.current + ' A, ' + iRatio.toFixed(2) + 'x In)';
+        this.testTimer = setTimeout(() => { if (this.state === 'TESTING') this.completeNoTrip(type, peakCurrent); }, Math.min(tripDelayMs, 3600000));
+        if (this.onStateChange) this.onStateChange(); return;
       }
-      this.statusText = `TEST RUNNING: HIGH CURRENT (${this.telemetry.current} A, ${iRatio.toFixed(1)}x In)`;
-
-    } else if (this.activePath === 2) {
-      // PATH 2: VOLTAGE WITHSTAND TEST
-      testType = 'VOLTAGE WITHSTAND TEST';
-      this.telemetry.voltage = this.transformerSpecs.voltageStepUp.outputVoltage;
-      this.telemetry.current = parseFloat((0.8 + Math.random() * 0.6).toFixed(2)); // mA leakage
-      peakCurrent = 2.2;
-      tripDelayMs = 2500; // Passes withstand test
-      this.statusText = `TEST RUNNING: HIGH VOLTAGE POTENTIAL (${this.telemetry.voltage.toFixed(0)} V, LEAKAGE: ${this.telemetry.current} mA)`;
-
-    } else {
-      // PATH 3 & 4: CONTROLLED SHORT CIRCUIT (LIVE OR NEUTRAL)
-      testType = this.activePath === 3 ? 'SHORT CIRCUIT LIVE FAULT' : 'SHORT CIRCUIT NEUTRAL FAULT';
-
-      // Massive Prospective Fault Current: Isc_rms = V / Z
-      const loopZ = Math.max(this.impedance, 0.05);
-      const iscRms = Math.min(baseV / loopZ, 10000);
-      // Peak asymmetric fault current: Ip = sqrt(2) * Isc * kappa
-      const kappa = 1.0 + Math.exp(-Math.PI * this.R / Math.max(2 * Math.PI * 50 * (this.XL * 1e-3), 0.01));
-      peakCurrent = parseFloat((Math.sqrt(2) * iscRms * kappa).toFixed(1));
-      this.telemetry.current = parseFloat(iscRms.toFixed(1));
-      this.telemetry.peakCurrent = peakCurrent;
-
-      // Characteristic-dependent magnetic trip model. B/C/D are core curves;
-      // K/Z are simulation extensions requested for the configurable DUT.
-      const curveBand = this.dutCurveMultipliers[this.dutConfig.curve] || this.dutCurveMultipliers.C;
-      const iRatio = this.telemetry.current / Math.max(inRated, 0.1);
+      tripDelayMs = Math.min(this.testConfig.durationSec * 1000, 3600000);
+    } else if (type === 'INSTANTANEOUS' || type === 'SHORT_CIRCUIT') {
       if (iRatio >= curveBand.max) tripDelayMs = 7 + Math.random() * 8;
       else if (iRatio >= curveBand.min) tripDelayMs = 12 + Math.random() * 18;
-      else tripDelayMs = 350 + Math.random() * 500;
-
-      this.statusText = `FAULT APPLIED: ${testType} (Ip: ${(peakCurrent / 1000).toFixed(2)} kA)`;
-    }
-
-    if (this.onStateChange) this.onStateChange();
-
-    // Schedule trip & DAQ capture
-    this.testTimer = setTimeout(() => {
-      if (this.state === 'TESTING') {
-        this.tripDUT(tripDelayMs, peakCurrent, testType);
+      else {
+        tripDelayMs = this.testConfig.durationSec * 1000;
+        this.statusText = 'TEST RUNNING: ' + type.replaceAll('_', ' ') + ' NO-TRIP CHECK (' + this.telemetry.current + ' A, ' + iRatio.toFixed(2) + 'x In)';
+        this.testTimer = setTimeout(() => { if (this.state === 'TESTING') this.completeNoTrip(type, peakCurrent); }, Math.min(tripDelayMs, 3600000));
+        if (this.onStateChange) this.onStateChange(); return;
       }
-    }, Math.min(tripDelayMs, 4000));
+    } else if (type === 'BREAKING_CAPACITY') { tripDelayMs = 12 + Math.random() * 18; }
+    this.statusText = 'TEST RUNNING: ' + type.replaceAll('_', ' ') + ' (' + this.telemetry.current + ' A, ' + iRatio.toFixed(2) + 'x In, PF ' + this.powerFactor.toFixed(3) + ')';
+    if (this.onStateChange) this.onStateChange();
+    this.testTimer = setTimeout(() => { if (this.state === 'TESTING') this.tripDUT(tripDelayMs, peakCurrent, type); }, Math.min(tripDelayMs, 3600000));
   }
-
   // Execute instantaneous trip, interrupt current, isolate switch, and capture DAQ
   tripDUT(tripTimeMs, peakCurrent, testType) {
     soundFx.stopTransformerHum();
@@ -486,7 +625,8 @@ export class MCBSimulationEngine {
     // 6. Generate High-Speed DAQ Waveform (500 samples over 50ms)
     this.generateDAQWaveform(tripTimeMs, peakCurrent, this.telemetry.voltage, arcV);
 
-    // 7. Store Complete Test Report
+    // 7. Evaluate and store complete test report
+    this.testEvaluation = this.evaluateTestResult({ tripped: true, testType, current: faultCurrent, tripTimeMs });
     this.lastTestReport = {
       testType: testType || `PATH ${this.activePath} TEST`,
       pathId: this.activePath,
@@ -504,6 +644,11 @@ export class MCBSimulationEngine {
       rSetting: `${this.R} Ω`,
       xlSetting: `${this.XL} mH`,
       impedance: `${this.impedance.toFixed(3)} Ω`,
+      currentRatio: `${(faultCurrent / Math.max(this.dutConfig.ratedCurrent, 0.1)).toFixed(2)} x In`,
+      powerFactor: this.powerFactor.toFixed(3),
+      expectedResult: this.testEvaluation.expected,
+      result: this.testEvaluation.status,
+      resultReason: this.testEvaluation.reason,
       breakingStatus: 'INTERRUPTED (CONTACTS OPEN, HIGH-POWER ISOLATED)'
     };
 

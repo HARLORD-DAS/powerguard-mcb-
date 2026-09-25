@@ -23,6 +23,8 @@
       <div class="telemetry-pill"><span class="lbl">STATUS:</span> <strong id="callout-stat-state" class="val-green">READY</strong></div>
       <div class="telemetry-pill"><span class="lbl">VOLTAGE:</span> <strong id="callout-stat-v">230.2 V</strong></div>
       <div class="telemetry-pill"><span class="lbl">CURRENT:</span> <strong id="callout-stat-i">0.0 A</strong></div>
+      <div class="telemetry-pill"><span class="lbl">PF:</span> <strong id="callout-stat-pf">0.000</strong></div>
+      <div class="telemetry-pill"><span class="lbl">RESULT:</span> <strong id="callout-stat-result" class="val-green">READY</strong></div>
     </div>
     <div id="callout-dut-config" class="callout-dut-config hidden">
       <div class="config-title">DUT Parameter Configuration</div>
@@ -35,6 +37,21 @@
       <div class="config-row"><span class="cfg-lbl">Poles:</span><div class="cfg-chips" id="cfg-poles-chips">
         <button class="cfg-chip" data-poles="SP">SP</button><button class="cfg-chip" data-poles="SPN">SPN</button><button class="cfg-chip active" data-poles="DP">DP</button><button class="cfg-chip" data-poles="DPN">DPN</button><button class="cfg-chip" data-poles="TP">TP</button><button class="cfg-chip" data-poles="TPN">TPN</button><button class="cfg-chip" data-poles="FP">FP</button><button class="cfg-chip" data-poles="PN">PN</button><button class="cfg-chip" data-poles="DC">DC</button>
       </div></div>
+      <div class="config-row"><span class="cfg-lbl">Test Type:</span><div class="cfg-chips" id="cfg-testtype-chips">
+        <button class="cfg-chip active" data-testtype="OVERLOAD">Overload</button><button class="cfg-chip" data-testtype="INSTANTANEOUS">Instantaneous</button><button class="cfg-chip" data-testtype="SHORT_CIRCUIT">Short Circuit</button><button class="cfg-chip" data-testtype="BREAKING_CAPACITY">Breaking Capacity</button><button class="cfg-chip" data-testtype="VOLTAGE_WITHSTAND">Voltage Withstand</button>
+      </div></div>
+      <div class="config-grid">
+        <label class="test-field">Applied V (0–440 V)<input id="cfg-test-voltage" type="number" min="0" max="440" step="0.1" placeholder="Auto"></label>
+        <label class="test-field">Target I (0–10 kA)<input id="cfg-test-current" type="number" min="0" max="10000" step="0.1" placeholder="Auto"></label>
+        <label class="test-field">R (Ω)<input id="cfg-test-r" type="number" min="0.001" max="1000" step="0.001" placeholder="Common bank"></label>
+        <label class="test-field">XL (mH)<input id="cfg-test-xl" type="number" min="0" max="1000" step="0.001" placeholder="Common bank"></label>
+        <label class="test-field">Target PF<input id="cfg-test-pf-target" type="number" min="0.01" max="1" step="0.001" placeholder="Auto"></label>
+        <label class="test-field">Duration (s)<input id="cfg-test-duration" type="number" min="0.1" max="3600" step="0.1" value="5"></label>
+        <div class="test-field test-readout"><span>Z</span><strong id="cfg-test-z">0.000 Ω</strong></div>
+        <div class="test-field test-readout"><span>PF</span><strong id="cfg-test-pf">0.000</strong></div>
+        <div class="test-field test-readout"><span>I/In</span><strong id="cfg-test-ratio">0.00×</strong></div>
+      </div>
+      <div class="test-evaluation" id="cfg-test-evaluation">TEST CONDITION READY — configure parameters, then Execute Test</div>
     </div>
     <div id="callout-waveform-container" class="callout-waveform-container hidden">
       <div class="waveform-header"><span class="wf-title">DAQ Sub-Cycle Transient Waveform</span><div class="wf-badges">
