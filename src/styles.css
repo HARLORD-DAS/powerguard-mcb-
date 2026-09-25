@@ -469,3 +469,11 @@ html, body {
 @media (max-width: 520px) {
   .config-grid { grid-template-columns: 1fr; }
 }
+
+
+.world-callout { top:76px; right:18px; left:auto !important; width:min(430px,30vw); min-width:340px; max-width:430px; max-height:calc(100vh - 150px); overflow-y:auto; transform:none !important; transform-origin:top right; scrollbar-width:thin; }
+.world-callout.hidden { transform:none !important; }
+.cfg-chip { min-height:30px; padding:5px 9px; font-size:11px; }
+.config-row { margin-bottom:9px; }
+.test-field input { min-height:34px; font-size:14px; }
+@media (max-width:900px) { .world-callout { top:58px; right:10px; width:calc(100vw - 20px); min-width:0; max-width:none; max-height:calc(100vh - 118px); } }
