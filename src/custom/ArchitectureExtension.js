@@ -39,7 +39,10 @@ export function installCustomMCBArchitecture() {
   MCBSimulationEngine.prototype.selectPath = function(pathId) {
     const result = originalSelectPath.call(this, pathId);
     const a = ensureArchitecture(this);
-    if (pathId >= 1 && pathId <= 4) {
+    // The base engine rejects path changes while VERIFYING/TESTING. Do not
+    // update the extension's mirrored path state when that interlock rejects
+    // the request, otherwise the PLC/DAQ mirror can desynchronize from activePath.
+    if (pathId >= 1 && pathId <= 4 && this.activePath === pathId) {
       a.selectedPath = pathId;
       resetPathStates(this);
       a.plcState = 'PATH SELECTION';
