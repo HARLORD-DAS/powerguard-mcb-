@@ -466,6 +466,7 @@ class DigitalTwinApp {
     setValue('cfg-test-current', cfg.targetCurrent);
     setValue('cfg-test-r', cfg.customR);
     setValue('cfg-test-xl', cfg.customXL);
+    setValue('cfg-test-pf-target', cfg.targetPowerFactor);
     setValue('cfg-test-duration', cfg.durationSec);
     const z = document.getElementById('cfg-test-z');
     const pf = document.getElementById('cfg-test-pf');
@@ -639,6 +640,7 @@ class DigitalTwinApp {
     bindNumber('cfg-test-current', this.sim.setTargetCurrent);
     bindNumber('cfg-test-r', this.sim.setTestResistance);
     bindNumber('cfg-test-xl', this.sim.setTestReactance);
+    bindNumber('cfg-test-pf-target', this.sim.setTestPowerFactor);
     bindNumber('cfg-test-duration', this.sim.setTestDuration);
 
     // DUT Config Chips Listeners
